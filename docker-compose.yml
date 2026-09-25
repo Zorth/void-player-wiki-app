@@ -1,0 +1,23 @@
+services:
+  wiki-app:
+    build:
+      context: /thor-server/apps/void-player-wiki-app
+      dockerfile: Dockerfile
+    image: void-player-wiki-app:latest
+    container_name: void-wiki-app
+    restart: unless-stopped
+    env_file:
+      - /thor-server/apps/void-player-wiki-app/.env
+    ports:
+      - "0.0.0.0:3005:3000"
+    volumes:
+      - /mnt/whale/07_NOTES_WORKING/void_player_wiki:/data/vault
+      - /thor-server/apps/void-player-wiki-app/data:/data/app
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+        reservations:
+          memory: 128M
+          cpus: "0.25"
