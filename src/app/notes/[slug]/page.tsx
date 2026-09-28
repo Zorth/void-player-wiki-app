@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getNoteBySlug, renderMarkdown, KNOWN_WORLDS, slugify, getCharacterAvatar } from '@/lib/vault';
+import { formatPlayerName } from '@/lib/constants';
 import { getGuildCharacters, getGuildSessions, getGuildWorlds, getGuildQuests } from '@/lib/guild';
 import { getSession } from '@/lib/auth';
 import { formatDate } from '@/lib/date';
@@ -355,7 +356,7 @@ export default async function NotePage({ params }: { params: { slug: string } })
                 <div>
                   <span className="text-obsidian-textFaint block">Player</span>
                   <span className="font-semibold text-white">
-                    {matchedChar ? matchedChar.player : (note.authors[0] || 'Unknown')}
+                    {matchedChar ? formatPlayerName(matchedChar.player) : (formatPlayerName(note.authors[0]) || 'Unknown')}
                   </span>
                 </div>
                 <div>
@@ -556,7 +557,7 @@ export default async function NotePage({ params }: { params: { slug: string } })
                         )}
                       </div>
                       <p className="text-[11px] text-obsidian-textFaint truncate">
-                        {pc.ancestry && pc.class ? `${pc.ancestry} ${pc.class}` : pc.player ? `Played by ${pc.player}` : 'Adventurer'}
+                        {pc.ancestry && pc.class ? `${pc.ancestry} ${pc.class}` : pc.player ? `Played by ${formatPlayerName(pc.player)}` : 'Adventurer'}
                       </p>
                     </div>
                   </div>

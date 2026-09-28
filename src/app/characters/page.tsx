@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { getGuildCharacters } from '@/lib/guild';
 import { getAllNotes, slugify, getCharacterAvatar, NoteMetadata } from '@/lib/vault';
+import { formatPlayerName } from '@/lib/constants';
 import { Users, BookOpen, PlusCircle, Shield, Award } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -98,7 +99,7 @@ export default async function CharactersPage() {
                     </div>
 
                     <p className="text-xs text-obsidian-textFaint mt-0.5 truncate">
-                      Played by <span className="text-obsidian-textMuted font-medium">{c.player}</span>
+                      Played by <span className="text-obsidian-textMuted font-medium">{formatPlayerName(c.player)}</span>
                     </p>
                   </div>
                 </div>
