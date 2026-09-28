@@ -322,24 +322,23 @@ export default async function NotePage({ params }: { params: { slug: string } })
         </div>
       </header>
 
-      {/* Guild API Character Dossier Card (API data takes precedence) */}
-      {isCharacter && (matchedChar || characterAvatar) && (
-        <section className="p-5 bg-gradient-to-r from-blue-950/20 via-obsidian-surface to-obsidian-surface border border-blue-800/40 rounded-2xl shadow-sm">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
-            {/* Character Profile Picture */}
-            {characterAvatar ? (
+      {/* Character Profile & Official Guild Record (Side-by-Side) */}
+      {isCharacter && (
+        <div className="flex flex-col sm:flex-row items-start gap-5">
+          {/* Character Profile Picture (outside the callout card) */}
+          {characterAvatar && (
+            <div className="shrink-0">
               <img
                 src={characterAvatar}
                 alt={matchedChar?.name || note.title}
-                className="max-h-48 sm:max-h-56 max-w-[180px] sm:max-w-[220px] w-auto h-auto object-contain border border-blue-500/40 shadow-md bg-obsidian-card shrink-0"
+                className="max-h-56 max-w-[200px] sm:max-w-[240px] w-auto h-auto object-contain border border-obsidian-border shadow-md bg-obsidian-card"
               />
-            ) : (
-              <div className="w-20 h-20 sm:w-24 sm:h-24 bg-gradient-to-br from-blue-900/40 via-obsidian-purpleFaint to-obsidian-card border border-blue-800/40 flex items-center justify-center shrink-0 text-blue-300 font-bold text-2xl font-serif shadow-sm">
-                {(matchedChar?.name || note.title).charAt(0)}
-              </div>
-            )}
+            </div>
+          )}
 
-            <div className="flex-1 w-full min-w-0 space-y-3">
+          {/* Guild API Character Dossier Card (Callout) */}
+          {(matchedChar || !characterAvatar) && (
+            <section className="flex-1 w-full min-w-0 p-5 bg-gradient-to-r from-blue-950/20 via-obsidian-surface to-obsidian-surface border border-blue-800/40 rounded-2xl space-y-3 shadow-sm">
               <div className="flex items-center justify-between border-b border-obsidian-borderSubtle pb-2.5">
                 <div className="inline-flex items-center space-x-2 text-xs font-bold uppercase tracking-wider text-blue-300">
                   <Shield className="w-3.5 h-3.5" />
@@ -376,9 +375,9 @@ export default async function NotePage({ params }: { params: { slug: string } })
                   </span>
                 </div>
               </div>
-            </div>
-          </div>
-        </section>
+            </section>
+          )}
+        </div>
       )}
 
       {/* Guild API Session Record Card */}
