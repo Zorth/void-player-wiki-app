@@ -113,7 +113,13 @@ export function recordUserLogin(userId: string, name: string, email: string, nic
   const db = getDb();
   const existing = db.prepare('SELECT * FROM user_permissions WHERE user_id = ?').get(userId) as unknown as UserPermissionRecord | undefined;
   
-  const isSuperAdmin = isAdmin || email === 'jasper_goens@hotmail.com' || nickname?.toLowerCase() === 'zorth' || userId === 'user_3AZtRlDbNyvNAaBVjvrfceGwe69';
+  const isSuperAdmin = isAdmin || 
+    email === 'jasper_goens@hotmail.com' || 
+    email === 'hubbe.platteau2@gmail.com' ||
+    nickname?.toLowerCase() === 'zorth' || 
+    nickname?.toLowerCase() === 'hubbe' ||
+    userId === 'user_3AZtRlDbNyvNAaBVjvrfceGwe69' ||
+    userId === 'user_3AiTA7kVIsvRACWPU8yELDGggKj';
 
   if (!existing) {
     db.prepare(`
@@ -132,7 +138,7 @@ export function recordUserLogin(userId: string, name: string, email: string, nic
 }
 
 export function canUserEdit(userId: string, isClerkAdmin: boolean): boolean {
-  if (isClerkAdmin || userId === 'user_3AZtRlDbNyvNAaBVjvrfceGwe69') return true;
+  if (isClerkAdmin || userId === 'user_3AZtRlDbNyvNAaBVjvrfceGwe69' || userId === 'user_3AiTA7kVIsvRACWPU8yELDGggKj') return true;
   const db = getDb();
   const rec = db.prepare('SELECT can_edit, is_admin FROM user_permissions WHERE user_id = ?').get(userId) as unknown as UserPermissionRecord | undefined;
   if (!rec) return false;

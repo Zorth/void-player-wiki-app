@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { MessageSquare, Trash2, Send, LogIn } from 'lucide-react';
+import { formatDateTime24h } from '@/lib/date';
 
 interface Comment {
   id: number;
@@ -169,7 +170,7 @@ export default function CommentsSection({ noteSlug }: { noteSlug: string }) {
                         <span className="text-xs text-obsidian-textFaint">@{c.user_nickname}</span>
                       )}
                       <span className="text-[11px] text-obsidian-textFaint">
-                        {new Date(c.created_at).toLocaleDateString()}
+                        {formatDateTime24h(c.created_at)}
                       </span>
                     </div>
 

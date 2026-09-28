@@ -25,7 +25,15 @@ export async function GET(req: NextRequest, { params }: { params: { filename: st
   if (!fs.existsSync(filePath)) {
     if (fs.existsSync(ATTACHMENTS_DIR)) {
       const allFiles = fs.readdirSync(ATTACHMENTS_DIR);
-      const matched = allFiles.find(f => f.toLowerCase() === safeFilename.toLowerCase());
+      // Direct match case-insensitive
+      let matched = allFiles.find(f => f.toLowerCase() === safeFilename.toLowerCase());
+      
+      // If original image not found, check if a converted .webp version exists
+      if (!matched) {
+        const baseWithoutExt = safeFilename.substring(0, safeFilename.lastIndexOf('.')) || safeFilename;
+        matched = allFiles.find(f => f.toLowerCase() === `${baseWithoutExt.toLowerCase()}.webp`);
+      }
+
       if (matched) {
         filePath = path.join(ATTACHMENTS_DIR, matched);
       }
@@ -33,7 +41,12 @@ export async function GET(req: NextRequest, { params }: { params: { filename: st
   }
 
   if (!fs.existsSync(filePath)) {
-    return new NextResponse('File Not Found', { status: 404 });
+    return new NextResponse('File Not Found', {
+      status: 404,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+      },
+    });
   }
 
   const ext = path.extname(filePath).toLowerCase();
@@ -45,6 +58,7 @@ export async function GET(req: NextRequest, { params }: { params: { filename: st
     headers: {
       'Content-Type': contentType,
       'Cache-Control': 'public, max-age=31536000, immutable',
+      'Access-Control-Allow-Origin': '*',
     },
   });
 }

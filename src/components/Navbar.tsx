@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Search, Compass, BookOpen, Users, ScrollText, PlusCircle, Shield, LogOut, LogIn, ChevronDown, ExternalLink } from 'lucide-react';
+import { Search, Compass, BookOpen, Users, ScrollText, PlusCircle, Shield, LogOut, LogIn, ChevronDown, ExternalLink, Menu, X } from 'lucide-react';
 import { KNOWN_WORLDS } from '@/lib/constants';
 import SearchModal from './SearchModal';
 
@@ -23,6 +23,7 @@ export default function Navbar() {
   const [loading, setLoading] = useState(true);
   const [worldsOpen, setWorldsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     fetch('/api/auth/me')
@@ -219,8 +220,129 @@ export default function Navbar() {
                 </a>
               )
             )}
+
+            {/* Mobile Menu Button */}
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden p-1.5 rounded-lg text-obsidian-textMuted hover:text-white hover:bg-obsidian-card border border-transparent hover:border-obsidian-border transition-colors"
+              aria-label="Toggle navigation menu"
+            >
+              {mobileMenuOpen ? <X className="w-5 h-5 text-obsidian-purpleLight" /> : <Menu className="w-5 h-5" />}
+            </button>
           </div>
         </div>
+
+        {/* Mobile Navigation Drawer */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-obsidian-border bg-obsidian-surface px-4 py-3 space-y-1 shadow-2xl animate-in slide-in-from-top-2 duration-150">
+            {/* Rules */}
+            <Link
+              href="/rules"
+              onClick={() => setMobileMenuOpen(false)}
+              className={`flex items-center space-x-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                pathname.startsWith('/rules')
+                  ? 'bg-obsidian-purpleFaint text-obsidian-purpleLight border border-obsidian-purpleBorder/40'
+                  : 'text-obsidian-text hover:bg-obsidian-card'
+              }`}
+            >
+              <BookOpen className="w-4 h-4 text-obsidian-purpleLight" />
+              <span>Rules &amp; Guidelines</span>
+            </Link>
+
+            {/* Sessions */}
+            <Link
+              href="/sessions"
+              onClick={() => setMobileMenuOpen(false)}
+              className={`flex items-center space-x-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                pathname === '/sessions'
+                  ? 'bg-obsidian-purpleFaint text-obsidian-purpleLight border border-obsidian-purpleBorder/40'
+                  : 'text-obsidian-text hover:bg-obsidian-card'
+              }`}
+            >
+              <ScrollText className="w-4 h-4 text-obsidian-purpleLight" />
+              <span>Session Reports</span>
+            </Link>
+
+            {/* Characters */}
+            <Link
+              href="/characters"
+              onClick={() => setMobileMenuOpen(false)}
+              className={`flex items-center space-x-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                pathname === '/characters'
+                  ? 'bg-obsidian-purpleFaint text-obsidian-purpleLight border border-obsidian-purpleBorder/40'
+                  : 'text-obsidian-text hover:bg-obsidian-card'
+              }`}
+            >
+              <Users className="w-4 h-4 text-obsidian-purpleLight" />
+              <span>Characters</span>
+            </Link>
+
+            {/* Worlds Dropdown in Mobile */}
+            <div className="pt-1 border-t border-obsidian-borderSubtle">
+              <div className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-obsidian-textFaint flex items-center space-x-1.5">
+                <Compass className="w-3.5 h-3.5" />
+                <span>Campaign Worlds</span>
+              </div>
+              <div className="grid grid-cols-2 gap-1 px-1 pt-1">
+                {KNOWN_WORLDS.map(w => (
+                  <Link
+                    key={w}
+                    href={`/worlds/${w.toLowerCase().replace(/\s+/g, '-')}`}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="px-2.5 py-1.5 rounded text-xs text-obsidian-textMuted hover:text-white hover:bg-obsidian-card transition-colors truncate"
+                  >
+                    {w}
+                  </Link>
+                ))}
+              </div>
+            </div>
+
+            {/* Guild Portal External */}
+            <div className="pt-2 border-t border-obsidian-borderSubtle">
+              <a
+                href="https://guild.tarragon.be"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium text-obsidian-purpleLight hover:bg-obsidian-card transition-colors"
+              >
+                <span className="flex items-center space-x-2">
+                  <ExternalLink className="w-4 h-4" />
+                  <span>Guild Portal (Sessions &amp; Characters)</span>
+                </span>
+                <span className="text-xs text-obsidian-textFaint font-mono">guild.tarragon.be</span>
+              </a>
+            </div>
+
+            {/* Editor Mobile Link if permitted */}
+            {user?.canEdit && (
+              <div className="pt-1">
+                <Link
+                  href="/editor"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center space-x-2 px-3 py-2 bg-obsidian-purple hover:bg-obsidian-purpleHover text-white rounded-lg text-sm font-medium transition-colors"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  <span>Create New Note</span>
+                </Link>
+              </div>
+            )}
+
+            {/* Admin Panel Mobile Link */}
+            {user?.isAdmin && (
+              <div className="pt-1">
+                <Link
+                  href="/admin"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center space-x-2 px-3 py-2 bg-obsidian-card hover:bg-obsidian-hover border border-obsidian-border text-obsidian-purpleLight hover:text-white rounded-lg text-sm font-medium transition-colors"
+                >
+                  <Shield className="w-4 h-4" />
+                  <span>Admin: Permissions &amp; Sync</span>
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
       </header>
 
       {/* Global Search Modal */}

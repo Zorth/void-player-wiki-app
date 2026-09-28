@@ -227,23 +227,33 @@ export function getAllNotes(): NoteMetadata[] {
           // Strip callouts
           body = body.replace(/>[^\n]*\n?/g, '');
           // Strip PC list section (## [[pc|Player Character]]s or ## Player Characters)
-          body = body.replace(/##\s*(?:\[\[pc\|Player Character\]\]s|Player Characters)[\s\S]*?(?=\n##|\Z)/gi, '');
-          // Strip Notes section if it only has an empty bullet
-          const notesMatch = body.match(/##\s*Notes\s*([\s\S]*)/i);
-          if (notesMatch) {
-            const notesText = notesMatch[1].replace(/^[-\s*]+$/gm, '').trim();
-            body = body.slice(0, notesMatch.index) + '\n' + notesText;
-          }
+          body = body.replace(/##\s+\[\[pc\|Player Character\]\]s[\s\S]*?(?=\n##|$)/i, '');
+          body = body.replace(/##\s+Player Characters[\s\S]*?(?=\n##|$)/i, '');
+          // Strip Notes section if it only has empty bullets / whitespace
+          body = body.replace(/##\s*Notes\s*([\s\S]*)/i, (_, notes) => {
+            return notes.replace(/^[\s-*]+$/gm, '').trim();
+          });
           // Strip remaining markdown headings, bullet markers, whitespace
-          const cleanBody = body.replace(/#[^\n]*/g, '').replace(/^[-\s*]+$/gm, '').trim();
+          const cleanBody = body.replace(/#[^\n]*/g, '').replace(/^[\s-*]+$/gm, '').trim();
           hasSubstance = cleanBody.length > 20;
         }
         hasReport = hasSubstance;
       }
 
+      let finalTitle = title;
+      if (cat === 'session-report' || tags.includes('session')) {
+        const sessionDateStr = date ? String(date).trim() : '';
+        const sessionWorld = worlds.length > 0 ? worlds[0].toUpperCase() : '';
+        if (sessionDateStr && sessionWorld) {
+          finalTitle = `${sessionDateStr} ${sessionWorld}`;
+        } else if (sessionDateStr) {
+          finalTitle = sessionDateStr;
+        }
+      }
+
       notes.push({
         slug,
-        title,
+        title: finalTitle,
         category: cat,
         worlds,
         tags,
@@ -292,9 +302,12 @@ export function getNotesByWorld(world: string): NoteMetadata[] {
   return all.filter(n => n.worlds.some(w => w.toLowerCase() === target));
 }
 
-export function getSessionReports(worldFilter?: string): NoteMetadata[] {
+export function getSessionReports(worldFilter?: string, requireReport: boolean = false): NoteMetadata[] {
   const all = getAllNotes();
   let sessions = all.filter(n => n.category === 'session-report');
+  if (requireReport) {
+    sessions = sessions.filter(n => n.hasReport);
+  }
   if (worldFilter && worldFilter.toLowerCase() !== 'all') {
     const target = worldFilter.toLowerCase();
     sessions = sessions.filter(n => n.worlds.some(w => w.toLowerCase() === target));
@@ -314,6 +327,24 @@ export function getNotesByTag(tag: string): NoteMetadata[] {
   return all.filter(n => n.tags.some(t => t.toLowerCase() === target || t.toLowerCase().startsWith(target + '/')));
 }
 
+export function getAllTags(): Array<{ tag: string; count: number }> {
+  const all = getAllNotes();
+  const counts = new Map<string, number>();
+
+  for (const n of all) {
+    for (const t of n.tags) {
+      const clean = t.toLowerCase().trim();
+      if (clean) {
+        counts.set(clean, (counts.get(clean) || 0) + 1);
+      }
+    }
+  }
+
+  return Array.from(counts.entries())
+    .map(([tag, count]) => ({ tag, count }))
+    .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+}
+
 export function saveNote(
   category: NoteMetadata['category'],
   title: string,
@@ -331,8 +362,19 @@ export function saveNote(
   else if (category === 'character' || tags.includes('pc')) targetFolder = 'Player Characters';
   else if (category === 'guide' || tags.includes('meta')) targetFolder = '_META';
 
-  const slug = slugify(title);
-  const fileName = `${title.replace(/[\\/:*?"<>|]/g, '')}.md`;
+  let canonicalTitle = title.trim();
+  if (category === 'session-report' || tags.includes('session')) {
+    const sDate = (date || existingFilePath?.match(/(\d{4}-\d{2}-\d{2})/)?.[1] || '').trim();
+    const sWorld = (worlds.length > 0 ? worlds[0] : '').toUpperCase().trim();
+    if (sDate && sWorld) {
+      canonicalTitle = `${sDate} ${sWorld}`;
+    } else if (sDate) {
+      canonicalTitle = sDate;
+    }
+  }
+
+  const slug = slugify(canonicalTitle);
+  const fileName = `${canonicalTitle.replace(/[\\/:*?"<>|]/g, '')}.md`;
   const fullPath = existingFilePath ? path.join(VAULT_PATH, existingFilePath) : path.join(VAULT_PATH, targetFolder, fileName);
 
   let existingData: any = {};
@@ -355,7 +397,7 @@ export function saveNote(
 
   const frontmatterData: any = {
     ...existingData,
-    title,
+    title: canonicalTitle,
     draft: false,
     worlds: finalWorlds,
     tags,
@@ -591,5 +633,45 @@ export function getCharacterAvatar(characterName: string, localNote?: NoteMetada
   }
 
   return null;
+}
+
+export function formatInlineMarkdown(content: string, titleMap?: Map<string, string>): string {
+  if (!content) return '';
+  if (!titleMap) titleMap = getTitleToSlugMap();
+
+  let text = content;
+
+  // 1. Transform Wikilinks: [[Target]] or [[Target|Alias]]
+  text = text.replace(/\[\[(.*?)\]\]/g, (match, raw) => {
+    const parts = raw.split('|');
+    const target = parts[0].trim();
+    const alias = parts[1] ? parts[1].trim() : target;
+
+    // Check if it's a known world
+    const matchedWorld = KNOWN_WORLDS.find(w => w.toLowerCase() === target.toLowerCase());
+    if (matchedWorld) {
+      return `<a href="/worlds/${matchedWorld.toLowerCase().replace(/\s+/g, '-')}" class="wiki-link text-obsidian-purpleLight hover:underline font-medium">${alias}</a>`;
+    }
+
+    // Check in titleMap
+    const slug = titleMap!.get(target.toLowerCase());
+    if (slug) {
+      return `<a href="/notes/${slug}" class="wiki-link text-obsidian-purpleLight hover:underline font-medium">${alias}</a>`;
+    }
+
+    // Unresolved link
+    return `<span class="text-zinc-400 border-b border-dotted border-zinc-600 cursor-help" title="Unlinked: ${target}">${alias}</span>`;
+  });
+
+  // Strip block callouts if any leaked in
+  text = text.replace(/^[ \t]*(?:-\s*)?>[ \t]*\[![^\]]*\][^\n]*/gm, '');
+  text = text.replace(/^[ \t]*>[ \t]?/gm, '');
+
+  try {
+    const parsed = marked.parseInline(text) as string;
+    return parsed;
+  } catch {
+    return text;
+  }
 }
 

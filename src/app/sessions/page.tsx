@@ -1,7 +1,7 @@
 import Link from 'next/link';
-import { getSessionReports, KNOWN_WORLDS } from '@/lib/vault';
-import { getGuildSessions, getGuildCharacters } from '@/lib/guild';
-import { Calendar, Compass, Users, Coins, MessageSquare, PlusCircle, FilePenLine, CheckCircle2 } from 'lucide-react';
+import { getSessionReports, KNOWN_WORLDS, formatInlineMarkdown } from '@/lib/vault';
+import { getGuildSessions, getGuildCharacters, getGuildQuests } from '@/lib/guild';
+import { Calendar, Compass, Users, Coins, MessageSquare, PlusCircle, FilePenLine, CheckCircle2, Scroll } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,15 +14,23 @@ export default async function SessionsPage({
   const sessions = getSessionReports(worldFilter);
   const guildSessions = await getGuildSessions();
   const guildChars = await getGuildCharacters();
+  const guildQuests = await getGuildQuests();
 
   const charMap = new Map(guildChars.map(c => [c._id, c.name]));
 
-  // Match guild sessions to local sessions by date string
+  // Match guild sessions & quests to local sessions by date string
   const guildSessionByDate = new Map<string, any>();
+  const questBySessionDate = new Map<string, string>();
   for (const gs of guildSessions) {
     if (gs.date) {
       const dStr = new Date(gs.date).toISOString().split('T')[0];
       guildSessionByDate.set(dStr, gs);
+      if (gs.questId) {
+        const q = guildQuests.find(quest => quest._id === gs.questId);
+        if (q) {
+          questBySessionDate.set(dStr, q.name);
+        }
+      }
     }
   }
 
@@ -138,11 +146,20 @@ export default async function SessionsPage({
                       </h2>
                     </Link>
 
+                    {/* Quest Subtitle */}
+                    {s.date && questBySessionDate.has(s.date) && (
+                      <div className="flex items-center space-x-1.5 text-xs text-emerald-300 font-medium">
+                        <Scroll className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <span>{questBySessionDate.get(s.date)}</span>
+                      </div>
+                    )}
+
                     {/* Abstract or Prompt */}
                     {s.abstract ? (
-                      <p className="text-sm text-zinc-300 leading-relaxed max-w-4xl">
-                        {s.abstract}
-                      </p>
+                      <div
+                        className="text-sm text-zinc-300 leading-relaxed max-w-4xl [&_a]:text-obsidian-purpleLight [&_a]:hover:underline [&_strong]:text-white"
+                        dangerouslySetInnerHTML={{ __html: formatInlineMarkdown(s.abstract) }}
+                      />
                     ) : !hasReport ? (
                       <p className="text-xs text-obsidian-textFaint italic">
                         No debrief or mission report has been filed yet for this session.

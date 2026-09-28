@@ -91,7 +91,12 @@ export async function handleOidcCallback(code: string, stateStr?: string): Promi
   
   // Check admin claim from Clerk public_metadata or super admin fallback
   const rawAdmin = claims.admin || claims.public_metadata?.admin;
-  const isSuperAdmin = email === 'jasper_goens@hotmail.com' || nickname?.toLowerCase() === 'zorth' || userId === 'user_3AZtRlDbNyvNAaBVjvrfceGwe69';
+  const isSuperAdmin = email === 'jasper_goens@hotmail.com' || 
+    email === 'hubbe.platteau2@gmail.com' ||
+    nickname?.toLowerCase() === 'zorth' || 
+    nickname?.toLowerCase() === 'hubbe' ||
+    userId === 'user_3AZtRlDbNyvNAaBVjvrfceGwe69' ||
+    userId === 'user_3AiTA7kVIsvRACWPU8yELDGggKj';
   const isAdmin = Boolean(rawAdmin === true || rawAdmin === 'true' || isSuperAdmin);
 
   const rawGm = claims.gamemaster || claims.public_metadata?.gamemaster;

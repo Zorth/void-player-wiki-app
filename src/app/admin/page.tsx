@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Shield, Check, X, User, ArrowLeft, UserPlus, RefreshCw } from 'lucide-react';
+import { formatTime24h } from '@/lib/date';
 
 interface UserPerm {
   user_id: string;
@@ -175,7 +176,7 @@ export default function AdminPage() {
               </span>
             </div>
             <span className="text-[11px] text-emerald-400/80 font-mono">
-              Last synced: {new Date(syncResult.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              Last synced: {formatTime24h(syncResult.timestamp, true)}
             </span>
           </div>
         )}
@@ -226,8 +227,8 @@ export default function AdminPage() {
       {loading ? (
         <div className="text-center py-12 text-sm text-obsidian-textFaint">Loading user directory...</div>
       ) : (
-        <div className="bg-obsidian-surface border border-obsidian-border rounded-xl overflow-hidden">
-          <table className="w-full text-left text-sm">
+        <div className="bg-obsidian-surface border border-obsidian-border rounded-xl overflow-x-auto shadow-sm">
+          <table className="w-full text-left text-sm min-w-[500px]">
             <thead className="bg-obsidian-card border-b border-obsidian-border text-xs text-obsidian-textFaint uppercase">
               <tr>
                 <th className="px-6 py-3 font-semibold">User</th>

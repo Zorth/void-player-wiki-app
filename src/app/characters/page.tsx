@@ -111,14 +111,12 @@ export default async function CharactersPage() {
                     </span>
                   </div>
 
-                  {c.rank && c.rank !== 'none' && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-obsidian-textFaint">Rank:</span>
-                      <span className="capitalize font-medium text-obsidian-purpleLight">
-                        {c.rank}
-                      </span>
-                    </div>
-                  )}
+                  <div className="flex items-center justify-between">
+                    <span className="text-obsidian-textFaint">Rank:</span>
+                    <span className="capitalize font-medium text-obsidian-purpleLight">
+                      {c.rank && c.rank.toLowerCase() !== 'none' ? c.rank : 'Apprentice'}
+                    </span>
+                  </div>
 
                   <div className="flex items-center justify-between">
                     <span className="text-obsidian-textFaint">System:</span>

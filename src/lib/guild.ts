@@ -36,11 +36,26 @@ export interface GuildSession {
   questId?: string;
 }
 
+export interface GuildQuest {
+  _id: string;
+  name: string;
+  description?: string;
+  questgiver?: string;
+  reward?: string;
+  level?: number;
+  tags?: string[];
+  isCompleted?: boolean;
+  completedAt?: number;
+  completedSessionId?: string;
+  worldId?: string;
+}
+
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 let cachedWorlds: { data: GuildWorld[]; time: number } | null = null;
 let cachedCharacters: { data: GuildCharacter[]; time: number } | null = null;
 let cachedSessions: { data: GuildSession[]; time: number } | null = null;
+let cachedQuests: { data: GuildQuest[]; time: number } | null = null;
 
 const GUILD_BASE = 'https://guild.tarragon.be/api/external/v1';
 
@@ -106,3 +121,25 @@ export async function getGuildSessions(): Promise<GuildSession[]> {
   }
   return cachedSessions?.data || [];
 }
+
+export async function getGuildQuests(): Promise<GuildQuest[]> {
+  const now = Date.now();
+  if (cachedQuests && now - cachedQuests.time < CACHE_TTL) {
+    return cachedQuests.data;
+  }
+  try {
+    const res = await fetch(`${GUILD_BASE}/quests`, {
+      headers: { 'User-Agent': 'Thor-Void-Wiki/1.0' },
+      next: { revalidate: 300 }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      cachedQuests = { data, time: now };
+      return data;
+    }
+  } catch (e) {
+    console.error('Failed to fetch guild quests:', e);
+  }
+  return cachedQuests?.data || [];
+}
+

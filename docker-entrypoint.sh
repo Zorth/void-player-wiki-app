@@ -11,8 +11,12 @@ EOF
 
 chmod 0600 /var/spool/cron/crontabs/root
 
-# Start busybox crond in the background
-crond -b -l 2 -L /data/app/crond.log
+# Start cron daemon
+if command -v crond >/dev/null 2>&1; then
+  crond -b -l 2 -L /data/app/crond.log
+elif command -v cron >/dev/null 2>&1; then
+  cron
+fi
 
 # Trigger initial sync in background once server starts up
 (

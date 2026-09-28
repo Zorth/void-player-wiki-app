@@ -1,9 +1,10 @@
 import Link from 'next/link';
-import { getAllNotes, getSessionReports, KNOWN_WORLDS } from '@/lib/vault';
-import { getGuildWorlds } from '@/lib/guild';
+import { getAllNotes, getSessionReports, KNOWN_WORLDS, formatInlineMarkdown } from '@/lib/vault';
+import { getGuildWorlds, getGuildSessions, getGuildQuests } from '@/lib/guild';
 import { getSession } from '@/lib/auth';
 import {
   Compass,
+  Scroll,
   ScrollText,
   Users,
   BookOpen,
@@ -27,8 +28,21 @@ export const dynamic = 'force-dynamic';
 export default async function HomePage() {
   const session = await getSession();
   const allNotes = getAllNotes();
-  const sessions = getSessionReports().slice(0, 4);
+  const sessions = getSessionReports(undefined, true).slice(0, 4);
   const guildWorlds = await getGuildWorlds();
+  const guildSessions = await getGuildSessions();
+  const guildQuests = await getGuildQuests();
+
+  const questBySessionDate = new Map<string, string>();
+  for (const gs of guildSessions) {
+    if (gs.date && gs.questId) {
+      const q = guildQuests.find(quest => quest._id === gs.questId);
+      if (q) {
+        const dStr = new Date(gs.date).toISOString().split('T')[0];
+        questBySessionDate.set(dStr, q.name);
+      }
+    }
+  }
 
   const guildWorldMap = new Map(guildWorlds.map(w => [w.name.toLowerCase(), w]));
 
@@ -435,10 +449,18 @@ export default async function HomePage() {
                   {s.title}
                 </h3>
 
+                {s.date && questBySessionDate.has(s.date) && (
+                  <div className="mt-1 flex items-center space-x-1.5 text-xs text-emerald-300 font-medium">
+                    <Scroll className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span className="truncate">{questBySessionDate.get(s.date)}</span>
+                  </div>
+                )}
+
                 {s.abstract && (
-                  <p className="mt-2 text-xs text-obsidian-textMuted line-clamp-2 leading-relaxed">
-                    {s.abstract}
-                  </p>
+                  <div
+                    className="mt-2 text-xs text-obsidian-textMuted line-clamp-2 leading-relaxed [&_a]:text-obsidian-purpleLight [&_a]:hover:underline [&_strong]:text-zinc-200"
+                    dangerouslySetInnerHTML={{ __html: formatInlineMarkdown(s.abstract) }}
+                  />
                 )}
               </div>
 

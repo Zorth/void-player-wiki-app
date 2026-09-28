@@ -1,5 +1,7 @@
-FROM node:22-alpine AS runner
+FROM node:22-slim AS runner
 WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends cron curl wget && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
 ENV PORT=3000

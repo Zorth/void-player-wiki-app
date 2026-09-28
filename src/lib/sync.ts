@@ -78,10 +78,12 @@ export async function runGuildSync(): Promise<SyncResult> {
       const charNames = (s.characters || []).map((cid: string) => charMap.get(cid)?.name).filter(Boolean);
 
       const existingFile = sessionFiles.find(f => f.includes(d));
+      const canonicalTitle = `${d} ${w.toUpperCase()}`;
       if (existingFile) {
         const fullPath = path.join(sessionDir, existingFile);
         const parsed = matter(fs.readFileSync(fullPath, 'utf8'));
         const data = { ...parsed.data };
+        data.title = canonicalTitle;
         data.guildSessionId = s._id;
         data.system = s.system || data.system || 'DnD';
         data.date = d;
@@ -94,10 +96,10 @@ export async function runGuildSync(): Promise<SyncResult> {
         } catch {}
         sessionsLinked++;
       } else {
-        const fileName = `${d} ${w}.md`;
+        const fileName = `${canonicalTitle}.md`;
         const fullPath = path.join(sessionDir, fileName);
         const data = {
-          title: `Session ${d} ${w}`,
+          title: canonicalTitle,
           draft: false,
           date: d,
           guildSessionId: s._id,
@@ -106,7 +108,7 @@ export async function runGuildSync(): Promise<SyncResult> {
           tags: ['session'],
         };
 
-        const body = `# Session ${d} ${w}\n\n` +
+        const body = `# ${canonicalTitle}\n\n` +
           `> [!abstract]\n` +
           `> \n\n` +
           `## [[pc|Player Character]]s\n` +
@@ -183,9 +185,7 @@ export async function runGuildSync(): Promise<SyncResult> {
           tags: ['pc', `pc/${rank}`],
         };
 
-        const body = `> [!abstract]\n` +
-          `> Level ${c.lvl} ${c.ancestry} ${c.class} (${c.system}) played by ${c.player}.\n\n` +
-          `## Backstory & Dossier\n` +
+        const body = `## Backstory & Dossier\n` +
           `*Player character dossier awaiting player lore entries.*\n`;
 
         fs.writeFileSync(fullPath, matter.stringify(body, data), 'utf8');

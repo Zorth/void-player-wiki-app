@@ -1,8 +1,10 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { getNotesByWorld, getSessionReports, KNOWN_WORLDS, renderMarkdown } from '@/lib/vault';
-import { getGuildWorlds } from '@/lib/guild';
-import { Compass, ExternalLink, Calendar, MapPin, Users, Flag, BookOpen, ScrollText } from 'lucide-react';
+import { getNotesByWorld, getSessionReports, getAllNotes, KNOWN_WORLDS, renderMarkdown, slugify, formatInlineMarkdown } from '@/lib/vault';
+import { getGuildWorlds, getGuildSessions, getGuildQuests } from '@/lib/guild';
+import { getSession } from '@/lib/auth';
+import CommentsSection from '@/components/CommentsSection';
+import { Compass, ExternalLink, Calendar, MapPin, Users, Flag, BookOpen, ScrollText, Edit, User, Clock, Scroll } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,10 +23,34 @@ export default async function WorldPage({ params }: { params: { world: string } 
   }
 
   const worldName = matchedWorld;
+  const session = await getSession();
+
+  // Find the primary world note article in the vault (e.g. World Notes/Zenith.md)
+  const allNotes = getAllNotes();
+  const worldNote = allNotes.find(
+    n => n.title.toLowerCase().trim() === worldName.toLowerCase().trim() ||
+         slugify(n.title) === worldSlug ||
+         n.slug === worldSlug
+  );
+
   const notes = getNotesByWorld(worldName);
   const worldSessions = getSessionReports(worldName);
 
   const guildWorlds = await getGuildWorlds();
+  const guildSessions = await getGuildSessions();
+  const guildQuests = await getGuildQuests();
+
+  const questBySessionDate = new Map<string, string>();
+  for (const gs of guildSessions) {
+    if (gs.date && gs.questId) {
+      const q = guildQuests.find(quest => quest._id === gs.questId);
+      if (q) {
+        const dStr = new Date(gs.date).toISOString().split('T')[0];
+        questBySessionDate.set(dStr, q.name);
+      }
+    }
+  }
+
   const guildData = guildWorlds.find(w => w.name.toLowerCase() === worldName.toLowerCase());
 
   // World page and interactive map URL hosted on guild.tarragon.be (always capitalized world name)
@@ -42,12 +68,13 @@ export default async function WorldPage({ params }: { params: { world: string } 
     : null;
 
   const descriptionHtml = cleanDescription ? renderMarkdown(cleanDescription) : null;
+  const worldNoteHtml = worldNote?.rawContent ? renderMarkdown(worldNote.rawContent) : null;
 
-  // Categorize notes dynamically
-  const locations = notes.filter(n => n.tags.some(t => t.includes('location') || t.includes('settlement')));
-  const factions = notes.filter(n => n.tags.some(t => t.includes('faction') || t.includes('organization')));
-  const npcs = notes.filter(n => n.tags.some(t => t.includes('npc') || t.includes('character')) && n.category !== 'character');
-  const otherNotes = notes.filter(n => !locations.includes(n) && !factions.includes(n) && !npcs.includes(n) && n.category !== 'session-report');
+  // Categorize notes dynamically (exclude the world note itself from subcategory lists)
+  const locations = notes.filter(n => n.slug !== worldNote?.slug && n.tags.some(t => t.includes('location') || t.includes('settlement')));
+  const factions = notes.filter(n => n.slug !== worldNote?.slug && n.tags.some(t => t.includes('faction') || t.includes('organization')));
+  const npcs = notes.filter(n => n.slug !== worldNote?.slug && n.tags.some(t => t.includes('npc') || t.includes('character')) && n.category !== 'character');
+  const otherNotes = notes.filter(n => n.slug !== worldNote?.slug && !locations.includes(n) && !factions.includes(n) && !npcs.includes(n) && n.category !== 'session-report');
 
   return (
     <div className="space-y-10">
@@ -65,6 +92,16 @@ export default async function WorldPage({ params }: { params: { world: string } 
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 self-start md:self-auto">
+            {worldNote && session?.canEdit && (
+              <Link
+                href={`/editor?slug=${encodeURIComponent(worldNote.slug)}`}
+                className="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-obsidian-card hover:bg-obsidian-hover text-obsidian-textMuted hover:text-white border border-obsidian-border rounded-xl text-xs font-semibold transition-colors shadow-sm"
+              >
+                <Edit className="w-3.5 h-3.5 text-obsidian-purpleLight" />
+                <span>Edit Article</span>
+              </Link>
+            )}
+
             {worldName !== 'General Lore' && (
               <a
                 href={guildWorldUrl}
@@ -222,16 +259,52 @@ export default async function WorldPage({ params }: { params: { world: string } 
                 <div className="font-semibold text-white hover:text-obsidian-purpleLight transition-colors">
                   {s.title}
                 </div>
+                {s.date && questBySessionDate.has(s.date) && (
+                  <div className="mt-1 flex items-center space-x-1.5 text-xs text-emerald-300 font-medium">
+                    <Scroll className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span className="truncate">{questBySessionDate.get(s.date)}</span>
+                  </div>
+                )}
                 {s.abstract && (
-                  <p className="text-xs text-obsidian-textMuted mt-1 line-clamp-2">
-                    {s.abstract}
-                  </p>
+                  <div
+                    className="text-xs text-obsidian-textMuted mt-1 line-clamp-2 [&_a]:text-obsidian-purpleLight [&_a]:hover:underline [&_strong]:text-zinc-200"
+                    dangerouslySetInnerHTML={{ __html: formatInlineMarkdown(s.abstract) }}
+                  />
                 )}
               </Link>
             ))}
           </div>
         )}
       </section>
+
+      {/* 6. Player-Written World Article / Dossier */}
+      {worldNote && worldNoteHtml && (
+        <section className="space-y-4 pt-6 border-t border-obsidian-border">
+          <div className="flex items-center justify-between border-b border-obsidian-borderSubtle pb-2">
+            <div className="flex items-center space-x-2">
+              <BookOpen className="w-4 h-4 text-obsidian-purpleLight" />
+              <h2 className="text-lg font-bold text-white">World Lore &amp; Dossier</h2>
+            </div>
+            {worldNote.authors.length > 0 && (
+              <span className="text-xs text-obsidian-textFaint">
+                Contributed by <strong className="text-white">{worldNote.authors.join(', ')}</strong>
+              </span>
+            )}
+          </div>
+
+          <div
+            className="prose max-w-none text-zinc-300 leading-relaxed font-sans bg-obsidian-surface/60 border border-obsidian-border rounded-2xl p-6 sm:p-8"
+            dangerouslySetInnerHTML={{ __html: worldNoteHtml }}
+          />
+        </section>
+      )}
+
+      {/* 7. Community Discussion / Comments */}
+      {worldNote && (
+        <section className="pt-6 border-t border-obsidian-border">
+          <CommentsSection noteSlug={worldNote.slug} />
+        </section>
+      )}
     </div>
   );
 }
