@@ -211,6 +211,11 @@ export function getAllNotes(): NoteMetadata[] {
         const imgMatch = parsed.content.match(/!\[\[([^\]]+\.(?:png|jpe?g|webp|gif|svg))(?:\s*\|.*?)?\]\]/i);
         if (imgMatch) {
           image = imgMatch[1].trim();
+        } else {
+          const mdImgMatch = parsed.content.match(/!\[.*?\]\(([^)\s]+\.(?:png|jpe?g|webp|gif|svg))\)/i);
+          if (mdImgMatch) {
+            image = mdImgMatch[1].trim();
+          }
         }
       }
 
@@ -614,22 +619,38 @@ export function renderMarkdown(content: string, titleMap?: Map<string, string>):
 
 export function getCharacterAvatar(characterName: string, localNote?: NoteMetadata): string | null {
   if (localNote?.image) {
-    return `/api/attachments/${encodeURIComponent(localNote.image)}`;
+    let img = localNote.image.replace(/^!*\[\[/, '').replace(/\]\]$/, '').split('|')[0].trim();
+    if (img.startsWith('http://') || img.startsWith('https://') || img.startsWith('/')) {
+      return img;
+    }
+    return `/api/attachments/${encodeURIComponent(img)}`;
   }
 
-  const attDir = path.join(VAULT_PATH, '_META', '_attachments');
-  if (fs.existsSync(attDir)) {
-    try {
-      const files = fs.readdirSync(attDir);
-      const cleanTarget = characterName.toLowerCase().replace(/[^a-z0-9]/g, '');
-      const found = files.find(f => {
-        const cleanFile = path.basename(f, path.extname(f)).toLowerCase().replace(/[^a-z0-9]/g, '');
-        return cleanFile === cleanTarget || cleanFile.startsWith(cleanTarget) || cleanTarget.startsWith(cleanFile);
-      });
-      if (found) {
-        return `/api/attachments/${encodeURIComponent(found)}`;
-      }
-    } catch {}
+  const searchDirs = [
+    path.join(VAULT_PATH, '_META', '_attachments'),
+    path.join(VAULT_PATH, '_attachments'),
+    path.join(VAULT_PATH, 'attachments'),
+    path.join(VAULT_PATH, 'Player Characters'),
+    path.join(VAULT_PATH, 'World Notes'),
+    VAULT_PATH,
+  ];
+
+  const cleanTarget = characterName.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+  for (const attDir of searchDirs) {
+    if (fs.existsSync(attDir)) {
+      try {
+        const files = fs.readdirSync(attDir);
+        const found = files.find(f => {
+          if (f.endsWith('.md')) return false;
+          const cleanFile = path.basename(f, path.extname(f)).toLowerCase().replace(/[^a-z0-9]/g, '');
+          return cleanFile === cleanTarget || (cleanTarget && (cleanFile.startsWith(cleanTarget) || cleanTarget.startsWith(cleanFile)));
+        });
+        if (found) {
+          return `/api/attachments/${encodeURIComponent(found)}`;
+        }
+      } catch {}
+    }
   }
 
   return null;

@@ -3,7 +3,15 @@ import path from 'path';
 import fs from 'fs';
 
 const VAULT_PATH = process.env.VAULT_PATH || '/mnt/whale/07_NOTES_WORKING/void_player_wiki';
-const ATTACHMENTS_DIR = path.join(VAULT_PATH, '_META', '_attachments');
+
+const SEARCH_DIRS = [
+  path.join(VAULT_PATH, '_META', '_attachments'),
+  path.join(VAULT_PATH, '_attachments'),
+  path.join(VAULT_PATH, 'attachments'),
+  path.join(VAULT_PATH, 'Player Characters'),
+  path.join(VAULT_PATH, 'World Notes'),
+  VAULT_PATH,
+];
 
 const MIME_MAP: Record<string, string> = {
   '.png': 'image/png',
@@ -19,25 +27,32 @@ export async function GET(req: NextRequest, { params }: { params: { filename: st
 
   // Security: prevent path traversal
   const safeFilename = path.basename(filename);
-  let filePath = path.join(ATTACHMENTS_DIR, safeFilename);
+  let filePath: string | null = null;
 
-  // Fallback case-insensitive check
-  if (!fs.existsSync(filePath)) {
-    if (fs.existsSync(ATTACHMENTS_DIR)) {
-      const allFiles = fs.readdirSync(ATTACHMENTS_DIR);
-      // Direct match case-insensitive
+  for (const dir of SEARCH_DIRS) {
+    if (!fs.existsSync(dir)) continue;
+
+    const directPath = path.join(dir, safeFilename);
+    if (fs.existsSync(directPath) && !fs.statSync(directPath).isDirectory()) {
+      filePath = directPath;
+      break;
+    }
+
+    try {
+      const allFiles = fs.readdirSync(dir);
       let matched = allFiles.find(f => f.toLowerCase() === safeFilename.toLowerCase());
-      
-      // If original image not found, check if a converted .webp version exists
       if (!matched) {
         const baseWithoutExt = safeFilename.substring(0, safeFilename.lastIndexOf('.')) || safeFilename;
         matched = allFiles.find(f => f.toLowerCase() === `${baseWithoutExt.toLowerCase()}.webp`);
       }
-
       if (matched) {
-        filePath = path.join(ATTACHMENTS_DIR, matched);
+        const candidate = path.join(dir, matched);
+        if (fs.existsSync(candidate) && !fs.statSync(candidate).isDirectory()) {
+          filePath = candidate;
+          break;
+        }
       }
-    }
+    } catch {}
   }
 
   if (!fs.existsSync(filePath)) {

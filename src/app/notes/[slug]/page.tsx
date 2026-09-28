@@ -54,20 +54,25 @@ export default async function NotePage({ params }: { params: { slug: string } })
     getGuildQuests(),
   ]);
 
-  // Check if character note
-  const isCharacter = note.category === 'character' || note.tags.some(t => t === 'pc' || t.startsWith('pc/'));
-  const matchedChar = isCharacter
-    ? guildChars.find(
-        c =>
-          c.name.toLowerCase().trim() === note.title.toLowerCase().trim() ||
-          slugify(c.name) === note.slug ||
-          (note.rawContent && note.rawContent.includes(c._id))
-      )
-    : null;
+  // Check if character note (by Guild API character match, category, guildCharacterId, or tags)
+  const matchedChar = guildChars.find(
+    c =>
+      (note.guildCharacterId && c._id === note.guildCharacterId) ||
+      c.name.toLowerCase().trim() === note.title.toLowerCase().trim() ||
+      slugify(c.name) === note.slug ||
+      slugify(c.name).replace(/-/g, '') === note.slug.replace(/-/g, '') ||
+      (note.rawContent && note.rawContent.includes(c._id))
+  ) || null;
+
+  const isCharacter =
+    note.category === 'character' ||
+    Boolean(matchedChar) ||
+    Boolean(note.guildCharacterId) ||
+    note.tags.some(t => t === 'pc' || t.startsWith('pc/') || t === 'character' || t === 'characters' || t === 'npc');
 
   const characterAvatar = isCharacter
     ? getCharacterAvatar(matchedChar?.name || note.title, note)
-    : null;
+    : (note.image ? getCharacterAvatar(note.title, note) : null);
 
   // Check if session note
   const isSession = note.category === 'session-report' || note.tags.includes('session');
