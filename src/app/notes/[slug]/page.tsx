@@ -65,6 +65,10 @@ export default async function NotePage({ params }: { params: { slug: string } })
       )
     : null;
 
+  const characterAvatar = isCharacter
+    ? getCharacterAvatar(matchedChar?.name || note.title, note)
+    : null;
+
   // Check if session note
   const isSession = note.category === 'session-report' || note.tags.includes('session');
   const matchedSession = isSession
@@ -181,10 +185,14 @@ export default async function NotePage({ params }: { params: { slug: string } })
     }
   }
 
-  // For character articles: strip redundant abstract callout from the body (the official guild dossier card covers it)
+  // For character articles: strip redundant abstract callout and duplicate image embed from the body (the official guild dossier card covers it)
   let bodyContent = note.rawContent;
   if (isCharacter) {
     bodyContent = bodyContent.replace(/>\s*\[!abstract\][^\n]*\n((?:[ \t]*>.*(?:\n|$))*)/gi, '').trim();
+    if (note.image) {
+      const escapedImg = note.image.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      bodyContent = bodyContent.replace(new RegExp(`!\\[\\[${escapedImg}(?:\\|[^\\]]*)?\\]\\]\\n*`, 'gi'), '').trim();
+    }
   }
   const htmlContent = renderMarkdown(bodyContent);
 
@@ -310,34 +318,59 @@ export default async function NotePage({ params }: { params: { slug: string } })
       </header>
 
       {/* Guild API Character Dossier Card (API data takes precedence) */}
-      {isCharacter && matchedChar && (
-        <section className="p-5 bg-gradient-to-r from-blue-950/20 via-obsidian-surface to-obsidian-surface border border-blue-800/40 rounded-2xl space-y-3">
-          <div className="flex items-center justify-between border-b border-obsidian-borderSubtle pb-2.5">
-            <div className="inline-flex items-center space-x-2 text-xs font-bold uppercase tracking-wider text-blue-300">
-              <Shield className="w-3.5 h-3.5" />
-              <span>Official Guild Character Record</span>
-            </div>
-            <span className="text-[11px] px-2 py-0.5 rounded bg-blue-900/40 text-blue-200 border border-blue-700/50 font-mono font-semibold">
-              Lvl {matchedChar.lvl}
-            </span>
-          </div>
+      {isCharacter && (matchedChar || characterAvatar) && (
+        <section className="p-5 bg-gradient-to-r from-blue-950/20 via-obsidian-surface to-obsidian-surface border border-blue-800/40 rounded-2xl shadow-sm">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
+            {/* Character Profile Picture */}
+            {characterAvatar ? (
+              <img
+                src={characterAvatar}
+                alt={matchedChar?.name || note.title}
+                className="max-h-48 sm:max-h-56 max-w-[180px] sm:max-w-[220px] w-auto h-auto object-contain border border-blue-500/40 shadow-md bg-obsidian-card shrink-0"
+              />
+            ) : (
+              <div className="w-20 h-20 sm:w-24 sm:h-24 bg-gradient-to-br from-blue-900/40 via-obsidian-purpleFaint to-obsidian-card border border-blue-800/40 flex items-center justify-center shrink-0 text-blue-300 font-bold text-2xl font-serif shadow-sm">
+                {(matchedChar?.name || note.title).charAt(0)}
+              </div>
+            )}
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-            <div>
-              <span className="text-obsidian-textFaint block">Player</span>
-              <span className="font-semibold text-white">{matchedChar.player}</span>
-            </div>
-            <div>
-              <span className="text-obsidian-textFaint block">Ancestry &amp; Class</span>
-              <span className="font-semibold text-white">{matchedChar.ancestry} {matchedChar.class}</span>
-            </div>
-            <div>
-              <span className="text-obsidian-textFaint block">Guild Rank</span>
-              <span className="font-semibold text-obsidian-purpleLight capitalize">{charRank}</span>
-            </div>
-            <div>
-              <span className="text-obsidian-textFaint block">System &amp; XP</span>
-              <span className="font-semibold text-white">{matchedChar.system === 'PF' ? 'Pathfinder 2e' : 'D&D 2024'} ({matchedChar.xp || 0} XP)</span>
+            <div className="flex-1 w-full min-w-0 space-y-3">
+              <div className="flex items-center justify-between border-b border-obsidian-borderSubtle pb-2.5">
+                <div className="inline-flex items-center space-x-2 text-xs font-bold uppercase tracking-wider text-blue-300">
+                  <Shield className="w-3.5 h-3.5" />
+                  <span>Official Guild Character Record</span>
+                </div>
+                {matchedChar && (
+                  <span className="text-[11px] px-2 py-0.5 rounded bg-blue-900/40 text-blue-200 border border-blue-700/50 font-mono font-semibold">
+                    Lvl {matchedChar.lvl}
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div>
+                  <span className="text-obsidian-textFaint block">Player</span>
+                  <span className="font-semibold text-white">
+                    {matchedChar ? matchedChar.player : (note.authors[0] || 'Unknown')}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-obsidian-textFaint block">Ancestry &amp; Class</span>
+                  <span className="font-semibold text-white">
+                    {matchedChar ? `${matchedChar.ancestry} ${matchedChar.class}` : 'Adventurer'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-obsidian-textFaint block">Guild Rank</span>
+                  <span className="font-semibold text-obsidian-purpleLight capitalize">{charRank}</span>
+                </div>
+                <div>
+                  <span className="text-obsidian-textFaint block">System &amp; XP</span>
+                  <span className="font-semibold text-white">
+                    {matchedChar ? `${matchedChar.system === 'PF' ? 'Pathfinder 2e' : 'D&D 2024'} (${matchedChar.xp || 0} XP)` : 'D&D 2024'}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </section>
