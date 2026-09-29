@@ -65,11 +65,16 @@ export default async function NotePage({ params }: { params: { slug: string } })
       (note.rawContent && note.rawContent.includes(c._id))
   ) || null;
 
-  const isCharacter =
-    note.category === 'character' ||
+  // Player Characters are from Guild API or specifically tagged/categorized as PC
+  const isPC =
     Boolean(matchedChar) ||
     Boolean(note.guildCharacterId) ||
-    note.tags.some(t => t === 'pc' || t.startsWith('pc/') || t === 'character' || t === 'characters' || t === 'npc');
+    note.tags.some(t => t === 'pc' || t.startsWith('pc/')) ||
+    (note.category === 'character' && !note.tags.includes('npc'));
+
+  const isCharacter =
+    isPC ||
+    note.tags.some(t => t === 'character' || t === 'characters' || t === 'npc');
 
   const characterAvatar = isCharacter
     ? getCharacterAvatar(matchedChar?.name || note.title, note)
@@ -202,9 +207,11 @@ export default async function NotePage({ params }: { params: { slug: string } })
   }
   const htmlContent = renderMarkdown(bodyContent);
 
-  // Normalize character rank: "none" = "apprentice"
-  const rawRank = matchedChar?.rank || (note.tags.find(t => t.startsWith('pc/'))?.replace('pc/', ''));
-  const charRank = rawRank && rawRank.toLowerCase() !== 'none' ? rawRank : 'Apprentice';
+  // Rank is only applicable to Player Characters: "none" = "apprentice"
+  const rawRank = isPC
+    ? matchedChar?.rank || (note.tags.find(t => t.startsWith('pc/'))?.replace('pc/', '')) || (note as any).rank
+    : null;
+  const charRank = isPC ? (rawRank && rawRank.toLowerCase() !== 'none' ? rawRank : 'Apprentice') : null;
 
   // Check if world note
   const isWorld = note.tags.includes('world') || KNOWN_WORLDS.some(w => w.toLowerCase() === note.title.toLowerCase());
@@ -218,7 +225,7 @@ export default async function NotePage({ params }: { params: { slug: string } })
   let fallbackHref = '/';
   let backLabel = 'Back to Wiki';
 
-  if (isCharacter || note.category === 'character') {
+  if (isPC) {
     fallbackHref = '/characters';
     backLabel = 'Back to Characters';
   } else if (isSession || note.category === 'session-report') {
@@ -276,7 +283,7 @@ export default async function NotePage({ params }: { params: { slug: string } })
                 )}
               </div>
             )}
-            {isCharacter && charRank && (
+            {isPC && charRank && (
               <div className="inline-flex items-center space-x-1.5 text-xs text-obsidian-purpleLight font-semibold uppercase tracking-wider">
                 <Award className="w-3.5 h-3.5" />
                 <span className="capitalize">{charRank} Rank</span>
@@ -337,8 +344,8 @@ export default async function NotePage({ params }: { params: { slug: string } })
             </div>
           )}
 
-          {/* Guild API Character Dossier Card (Callout) */}
-          {(matchedChar || !characterAvatar) && (
+          {/* Guild API Character Dossier Card (Callout) - only for Player Characters */}
+          {isPC && (matchedChar || !characterAvatar) && (
             <section className="flex-1 w-full min-w-0 p-5 bg-gradient-to-r from-blue-950/20 via-obsidian-surface to-obsidian-surface border border-blue-800/40 rounded-2xl space-y-3 shadow-sm">
               <div className="flex items-center justify-between border-b border-obsidian-borderSubtle pb-2.5">
                 <div className="inline-flex items-center space-x-2 text-xs font-bold uppercase tracking-wider text-blue-300">
