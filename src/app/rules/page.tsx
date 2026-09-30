@@ -57,17 +57,22 @@ export default async function RulesPage() {
         </p>
       </section>
 
-      {/* Section 1: Onboarding & Campaign Guidelines */}
+      {/* Section 1: Onboarding & Community */}
       <section className="space-y-4">
         <div className="flex items-center space-x-2 border-b border-obsidian-border pb-3">
           <Shield className="w-4 h-4 text-obsidian-purpleLight" />
           <h2 className="text-lg font-bold text-white tracking-tight">Onboarding &amp; Guidelines</h2>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <RuleCard
             title="Getting Started"
             slug="getting-started"
             description="5-step guide to register on Guild, join Discord, create your character, and join your first session."
+          />
+          <RuleCard
+            title="Memberships (Kobolds by Tarragon)"
+            slug="memberships"
+            description="Free monthly session policy (1 per calendar month), €10/year Kobold membership, and Voidmaster perks."
           />
           <RuleCard
             title="Campaign Guidelines"
@@ -122,7 +127,12 @@ export default async function RulesPage() {
           <RuleCard
             title="Downtime Activities"
             slug="downtime"
-            description="Available activities between expeditions, retraining feats, crafting items, and studying."
+            description="Pre-session downtime activities: Earn Income, Crafting, Retraining feats, Reputation tasks, and Research."
+          />
+          <RuleCard
+            title="Void Objective"
+            slug="void-objective"
+            description="Server-wide monthly goals, progression tiers, and scaling gold payouts based on community completion."
           />
           <RuleCard
             title="Earn Income"
@@ -160,9 +170,9 @@ export default async function RulesPage() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <RuleCard
-            title="GM'ing in The Void"
-            slug="gming"
-            description="Guidelines for running games, scheduling sessions on Guild, GM XP rewards, and session writeups."
+            title="Voidmaster Guide"
+            slug="voidmaster"
+            description="Complete GM guide: world setup on Guild, session types, GM XP, checklists, Void Council, and maps."
           />
           <RuleCard
             title="Hexploration (Sythian)"
