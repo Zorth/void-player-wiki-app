@@ -12,6 +12,8 @@ interface SearchResult {
   worlds: string[];
   tags: string[];
   abstract?: string;
+  url?: string;
+  isWorld?: boolean;
 }
 
 export default function SearchModal({ onClose }: { onClose: () => void }) {
@@ -50,7 +52,8 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
       setSelectedIndex(prev => (prev > 0 ? prev - 1 : results.length - 1));
     } else if (e.key === 'Enter' && results[selectedIndex]) {
       e.preventDefault();
-      router.push(`/notes/${results[selectedIndex].slug}`);
+      const target = results[selectedIndex];
+      router.push(target.url || `/notes/${target.slug}`);
       onClose();
     }
   };
@@ -85,10 +88,13 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
           ) : (
             results.map((r, i) => {
               const isSelected = i === selectedIndex;
+              const href = r.url || `/notes/${r.slug}`;
+              const isWorld = r.isWorld || href.startsWith('/worlds/');
+
               return (
                 <Link
-                  key={r.slug}
-                  href={`/notes/${r.slug}`}
+                  key={`${r.slug}-${href}`}
+                  href={href}
                   onClick={onClose}
                   className={`flex items-start justify-between p-3 rounded-lg transition-all ${
                     isSelected
@@ -98,14 +104,27 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
                 >
                   <div className="flex-1 pr-3">
                     <div className="flex items-center space-x-2">
-                      <FileText className={`w-4 h-4 ${isSelected ? 'text-obsidian-purpleLight' : 'text-obsidian-textMuted'}`} />
+                      {isWorld ? (
+                        <Compass className={`w-4 h-4 shrink-0 ${isSelected ? 'text-obsidian-purpleLight' : 'text-purple-400'}`} />
+                      ) : (
+                        <FileText className={`w-4 h-4 shrink-0 ${isSelected ? 'text-obsidian-purpleLight' : 'text-obsidian-textMuted'}`} />
+                      )}
                       <span className="font-medium text-sm text-white">{r.title}</span>
-                      {r.worlds.map(w => (
-                        <span key={w} className="inline-flex items-center text-[11px] px-1.5 py-0.5 rounded bg-purple-950/40 text-purple-300 border border-purple-800/40">
-                          <Compass className="w-3 h-3 mr-1" />
-                          {w}
+
+                      {isWorld && (
+                        <span className="inline-flex items-center text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-purple-900/60 text-purple-200 border border-purple-700/50">
+                          World
                         </span>
-                      ))}
+                      )}
+
+                      {r.worlds
+                        .filter(w => !isWorld || w.toLowerCase() !== r.title.toLowerCase())
+                        .map(w => (
+                          <span key={w} className="inline-flex items-center text-[11px] px-1.5 py-0.5 rounded bg-purple-950/40 text-purple-300 border border-purple-800/40">
+                            <Compass className="w-3 h-3 mr-1" />
+                            {w}
+                          </span>
+                        ))}
                     </div>
 
                     {r.abstract && (

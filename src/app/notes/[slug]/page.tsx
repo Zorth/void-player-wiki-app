@@ -30,6 +30,17 @@ export const dynamic = 'force-dynamic';
 
 export default async function NotePage({ params }: { params: { slug: string } }) {
   const noteSlug = decodeURIComponent(params?.slug || '');
+
+  // If this slug is for one of the primary campaign worlds, redirect to the unified world page immediately
+  const matchedWorldBySlug = KNOWN_WORLDS.find(
+    w => slugify(w) === slugify(noteSlug) ||
+         w.toLowerCase().replace(/\s+/g, '-') === noteSlug.toLowerCase() ||
+         w.toLowerCase() === noteSlug.toLowerCase()
+  );
+  if (matchedWorldBySlug) {
+    redirect(`/worlds/${matchedWorldBySlug.toLowerCase().replace(/\s+/g, '-')}`);
+  }
+
   const note = getNoteBySlug(noteSlug);
   if (!note) {
     notFound();
@@ -37,7 +48,7 @@ export default async function NotePage({ params }: { params: { slug: string } })
 
   const session = await getSession();
 
-  // If this article is for one of the primary campaign worlds, redirect to the unified world page
+  // If this article's title is for one of the primary campaign worlds, redirect to the unified world page
   const matchedKnownWorld = KNOWN_WORLDS.find(
     w => w.toLowerCase() === note.title.toLowerCase() ||
          slugify(w) === note.slug ||
