@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { MessageSquare, Trash2, Send, LogIn } from 'lucide-react';
 import { formatDateTime24h } from '@/lib/date';
+import { formatPlayerName } from '@/lib/constants';
 
 interface Comment {
   id: number;
@@ -23,9 +24,9 @@ interface UserSession {
   isAdmin: boolean;
 }
 
-export default function CommentsSection({ noteSlug }: { noteSlug: string }) {
+export default function CommentsSection({ noteSlug, initialUser }: { noteSlug: string; initialUser?: UserSession | null }) {
   const [comments, setComments] = useState<Comment[]>([]);
-  const [user, setUser] = useState<UserSession | null>(null);
+  const [user, setUser] = useState<UserSession | null>(initialUser || null);
   const [newComment, setNewComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -42,13 +43,15 @@ export default function CommentsSection({ noteSlug }: { noteSlug: string }) {
 
   useEffect(() => {
     fetchComments();
-    fetch('/api/auth/me')
-      .then(res => res.json())
-      .then(data => {
-        if (data.authenticated) setUser(data.user);
-      })
-      .catch(() => {});
-  }, [noteSlug]);
+    if (!initialUser) {
+      fetch('/api/auth/me')
+        .then(res => res.json())
+        .then(data => {
+          if (data.authenticated) setUser(data.user);
+        })
+        .catch(() => {});
+    }
+  }, [noteSlug, initialUser]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,7 +168,7 @@ export default function CommentsSection({ noteSlug }: { noteSlug: string }) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
-                      <span className="font-semibold text-sm text-white">{c.user_name}</span>
+                      <span className="font-semibold text-sm text-white">{formatPlayerName(c.user_name)}</span>
                       {c.user_nickname && c.user_nickname !== c.user_name && (
                         <span className="text-xs text-obsidian-textFaint">@{c.user_nickname}</span>
                       )}

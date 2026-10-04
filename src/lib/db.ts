@@ -27,6 +27,15 @@ export function getDb(): DatabaseSync {
 }
 
 function initSchema(db: DatabaseSync) {
+  // Performance optimizations
+  try {
+    db.exec(`
+      PRAGMA journal_mode = WAL;
+      PRAGMA synchronous = NORMAL;
+      PRAGMA temp_store = MEMORY;
+    `);
+  } catch {}
+
   // Comments table
   db.exec(`
     CREATE TABLE IF NOT EXISTS comments (

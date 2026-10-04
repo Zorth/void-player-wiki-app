@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getNotesByWorld, getSessionReports, getAllNotes, KNOWN_WORLDS, renderMarkdown, slugify, formatInlineMarkdown } from '@/lib/vault';
+import { formatAuthors } from '@/lib/constants';
 import { getGuildWorlds, getGuildSessions, getGuildQuests } from '@/lib/guild';
 import { getSession } from '@/lib/auth';
 import CommentsSection from '@/components/CommentsSection';
@@ -23,7 +24,13 @@ export default async function WorldPage({ params }: { params: { world: string } 
   }
 
   const worldName = matchedWorld;
-  const session = await getSession();
+
+  const [session, guildWorlds, guildSessions, guildQuests] = await Promise.all([
+    getSession(),
+    getGuildWorlds(),
+    getGuildSessions(),
+    getGuildQuests(),
+  ]);
 
   // Find the primary world note article in the vault (e.g. World Notes/Zenith.md)
   const allNotes = getAllNotes();
@@ -35,10 +42,6 @@ export default async function WorldPage({ params }: { params: { world: string } 
 
   const notes = getNotesByWorld(worldName);
   const worldSessions = getSessionReports(worldName);
-
-  const guildWorlds = await getGuildWorlds();
-  const guildSessions = await getGuildSessions();
-  const guildQuests = await getGuildQuests();
 
   const questBySessionDate = new Map<string, string>();
   for (const gs of guildSessions) {
@@ -287,7 +290,7 @@ export default async function WorldPage({ params }: { params: { world: string } 
             </div>
             {worldNote.authors.length > 0 && (
               <span className="text-xs text-obsidian-textFaint">
-                Contributed by <strong className="text-white">{worldNote.authors.join(', ')}</strong>
+                Contributed by <strong className="text-white">{formatAuthors(worldNote.authors)}</strong>
               </span>
             )}
           </div>
@@ -302,7 +305,7 @@ export default async function WorldPage({ params }: { params: { world: string } 
       {/* 7. Community Discussion / Comments */}
       {worldNote && (
         <section className="pt-6 border-t border-obsidian-border">
-          <CommentsSection noteSlug={worldNote.slug} />
+          <CommentsSection noteSlug={worldNote.slug} initialUser={session} />
         </section>
       )}
     </div>

@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
+import { invalidateVaultCache } from './vault';
 
 const GUILD_BASE = 'https://guild.tarragon.be/api/external/v1';
 
@@ -210,6 +211,8 @@ export async function runGuildSync(): Promise<SyncResult> {
       const infoFile = getSyncInfoFilePath();
       fs.writeFileSync(infoFile, JSON.stringify(result, null, 2), 'utf8');
     } catch {}
+
+    invalidateVaultCache();
 
     return result;
   } catch (err: any) {

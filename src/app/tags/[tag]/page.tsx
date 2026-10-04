@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { getNotesByTag, getAllNotes } from '@/lib/vault';
+import { formatAuthors } from '@/lib/constants';
 import { Tag, Compass, Calendar, ArrowRight } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -85,7 +86,7 @@ export default function TagPage({ params }: { params: { tag: string } }) {
               </div>
 
               <div className="mt-4 pt-3 border-t border-obsidian-borderSubtle flex items-center justify-between text-[11px] text-obsidian-textFaint">
-                <span>{n.authors.length > 0 ? `By ${n.authors.join(', ')}` : 'Lore Article'}</span>
+                <span>{n.authors.length > 0 ? `By ${formatAuthors(n.authors)}` : 'Lore Article'}</span>
                 <ArrowRight className="w-3.5 h-3.5 text-obsidian-purpleLight" />
               </div>
             </Link>

@@ -47,6 +47,66 @@ export default function EditorPage() {
 
 type ArticleType = 'location' | 'npc' | 'organization' | 'event' | 'species' | 'meta' | 'other' | 'session' | 'pc' | 'world';
 
+interface NoteIndexItem {
+  title: string;
+  slug: string;
+  category: string;
+  worlds: string[];
+  cleanTitle: string;
+  tokens: string[];
+}
+
+interface LinkSuggestionState {
+  suggestions: NoteIndexItem[];
+  startIndex: number;
+  endIndex: number;
+  matchedText: string;
+  isBracketMode: boolean;
+  field: 'content' | 'abstract' | 'notes';
+}
+
+function isLevenshtein1(s1: string, s2: string): boolean {
+  const l1 = s1.length;
+  const l2 = s2.length;
+  if (Math.abs(l1 - l2) > 1) return false;
+  if (s1 === s2) return true;
+
+  let i = 0;
+  let j = 0;
+  let edits = 0;
+
+  while (i < l1 && j < l2) {
+    if (s1[i] !== s2[j]) {
+      edits++;
+      if (edits > 1) return false;
+      if (l1 > l2) {
+        i++;
+      } else if (l2 > l1) {
+        j++;
+      } else {
+        i++;
+        j++;
+      }
+    } else {
+      i++;
+      j++;
+    }
+  }
+
+  if (i < l1 || j < l2) edits++;
+  return edits <= 1;
+}
+
+const STOP_WORDS = new Set([
+  'the', 'and', 'for', 'with', 'from', 'into', 'that', 'this', 'then', 'here',
+  'have', 'were', 'been', 'about', 'after', 'where', 'when', 'will', 'what',
+  'which', 'some', 'they', 'their', 'them', 'there', 'your', 'more', 'also',
+  'over', 'only', 'other', 'each', 'even', 'most', 'make', 'just', 'know',
+  'take', 'time', 'year', 'good', 'well', 'very', 'much', 'down', 'back',
+  'should', 'could', 'would', 'first', 'second', 'party', 'player', 'session',
+  'report', 'level', 'during', 'before', 'between', 'under', 'while'
+]);
+
 function EditorContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -106,6 +166,44 @@ function EditorContent() {
   const abstractTextareaRef = useRef<HTMLTextAreaElement>(null);
   const notesTextareaRef = useRef<HTMLTextAreaElement>(null);
   const activeFieldRef = useRef<'content' | 'abstract' | 'notes'>('content');
+  const otherTagContainerRef = useRef<HTMLDivElement>(null);
+  const subTagContainerRef = useRef<HTMLDivElement>(null);
+
+  // Real-time In-Text Fuzzy Link Suggestions State
+  const [indexedNotes, setIndexedNotes] = useState<NoteIndexItem[]>([]);
+  const [linkSuggestion, setLinkSuggestion] = useState<LinkSuggestionState | null>(null);
+  const linkCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        subTagContainerRef.current &&
+        !subTagContainerRef.current.contains(event.target as Node)
+      ) {
+        setShowSubTagDropdown(false);
+      }
+      if (
+        otherTagContainerRef.current &&
+        !otherTagContainerRef.current.contains(event.target as Node)
+      ) {
+        setShowOtherTagDropdown(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setShowSubTagDropdown(false);
+        setShowOtherTagDropdown(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   useEffect(() => {
     // Check user auth & edit permissions
@@ -223,6 +321,28 @@ function EditorContent() {
         }
       })
       .catch(() => {});
+
+    // Fetch all notes for fast in-text fuzzy link suggestions
+    fetch('/api/notes/titles')
+      .then(res => res.json())
+      .then(data => {
+        if (data.notes && Array.isArray(data.notes)) {
+          const processed: NoteIndexItem[] = data.notes.map((n: any) => {
+            const cleanTitle = (n.title || '').toLowerCase().trim();
+            const tokens = cleanTitle.split(/[\s_-]+/).filter((t: string) => t.length >= 2);
+            return {
+              title: n.title,
+              slug: n.slug,
+              category: n.category,
+              worlds: n.worlds || [],
+              cleanTitle,
+              tokens,
+            };
+          });
+          setIndexedNotes(processed);
+        }
+      })
+      .catch(() => {});
   }, [editSlug, searchParams]);
 
   const toggleWorld = (w: string) => {
@@ -274,6 +394,193 @@ function EditorContent() {
     } else {
       setContent(newContent);
     }
+  };
+
+  const applyLinkSuggestion = (selectedNote: { title: string; slug: string }) => {
+    if (!linkSuggestion) return;
+    const ta = getActiveTextarea();
+    if (!ta) return;
+
+    const val = ta.value;
+    const { startIndex, endIndex, matchedText, isBracketMode } = linkSuggestion;
+
+    let linkStr = '';
+    if (isBracketMode) {
+      linkStr = `[[${selectedNote.title}]]`;
+    } else {
+      const isExact = matchedText.toLowerCase() === selectedNote.title.toLowerCase();
+      linkStr = isExact ? `[[${selectedNote.title}]]` : `[[${selectedNote.title}|${matchedText}]]`;
+    }
+
+    const newContent = val.substring(0, startIndex) + linkStr + val.substring(endIndex);
+    updateActiveContent(newContent);
+    setLinkSuggestion(null);
+
+    setTimeout(() => {
+      ta.focus();
+      const newCursor = startIndex + linkStr.length;
+      ta.setSelectionRange(newCursor, newCursor);
+    }, 0);
+  };
+
+  const runLinkCheck = (text: string, cursorPos: number, field: 'content' | 'abstract' | 'notes') => {
+    if (!indexedNotes || indexedNotes.length === 0 || cursorPos === 0) {
+      setLinkSuggestion(null);
+      return;
+    }
+
+    const textBefore = text.slice(0, cursorPos);
+
+    // 1. Bracket Mode: Check if cursor is inside an unclosed [[
+    const lastOpenBracket = textBefore.lastIndexOf('[[');
+    if (lastOpenBracket !== -1) {
+      const lastCloseBracket = textBefore.lastIndexOf(']]');
+      if (lastCloseBracket < lastOpenBracket) {
+        const bracketContent = textBefore.slice(lastOpenBracket + 2);
+        if (!bracketContent.includes('\n')) {
+          const query = bracketContent.trim().toLowerCase();
+          const matches = indexedNotes
+            .map(n => {
+              if (!query) return { note: n, score: 50 };
+              const cleanT = n.cleanTitle;
+              if (cleanT === query) return { note: n, score: 100 };
+              if (cleanT.startsWith(query)) return { note: n, score: 90 };
+              if (n.tokens.some(t => t.startsWith(query))) return { note: n, score: 80 };
+              if (cleanT.includes(query)) return { note: n, score: 70 };
+              if (query.length >= 4 && n.tokens.some(t => isLevenshtein1(t, query))) return { note: n, score: 60 };
+              return { note: n, score: 0 };
+            })
+            .filter(m => m.score > 0)
+            .sort((a, b) => b.score - a.score || a.note.title.localeCompare(b.note.title))
+            .map(m => m.note);
+
+          if (matches.length > 0) {
+            setLinkSuggestion({
+              suggestions: matches.slice(0, 4),
+              startIndex: lastOpenBracket,
+              endIndex: cursorPos,
+              matchedText: bracketContent,
+              isBracketMode: true,
+              field,
+            });
+            return;
+          }
+        }
+      }
+    }
+
+    // 2. Check if cursor is inside an already closed [[...]]
+    const nextCloseBracket = text.indexOf(']]', cursorPos);
+    const nextOpenBracket = text.indexOf('[[', cursorPos);
+    if (nextCloseBracket !== -1 && (nextOpenBracket === -1 || nextCloseBracket < nextOpenBracket)) {
+      const prevOpenBracket = text.lastIndexOf('[[', cursorPos);
+      const prevCloseBracket = text.lastIndexOf(']]', cursorPos);
+      if (prevOpenBracket !== -1 && prevOpenBracket > prevCloseBracket) {
+        setLinkSuggestion(null);
+        return;
+      }
+    }
+
+    // 3. Plain Text Mode
+    const lastChar = textBefore[textBefore.length - 1];
+    if (!lastChar || /[\s\],.;:!?)]/.test(lastChar)) {
+      setLinkSuggestion(null);
+      return;
+    }
+
+    const lastNewline = textBefore.lastIndexOf('\n');
+    const lineBefore = lastNewline !== -1 ? textBefore.slice(lastNewline + 1) : textBefore;
+
+    const openBracketsInLine = (lineBefore.match(/\[\[/g) || []).length;
+    const closeBracketsInLine = (lineBefore.match(/\]\]/g) || []).length;
+    if (openBracketsInLine > closeBracketsInLine) {
+      setLinkSuggestion(null);
+      return;
+    }
+
+    const words = lineBefore.trimEnd().split(/\s+/);
+    if (words.length === 0) {
+      setLinkSuggestion(null);
+      return;
+    }
+
+    let bestMatches: Array<{ note: NoteIndexItem; score: number; candidate: string; startOffset: number }> = [];
+
+    const maxWordsToCheck = Math.min(4, words.length);
+    for (let w = maxWordsToCheck; w >= 1; w--) {
+      const candidateRaw = words.slice(words.length - w).join(' ');
+      const cleanCandidate = candidateRaw.replace(/^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$/g, '').trim();
+      const candLower = cleanCandidate.toLowerCase();
+
+      if (cleanCandidate.length < 3) continue;
+      if (STOP_WORDS.has(candLower)) continue;
+
+      const candPosInLine = lineBefore.lastIndexOf(cleanCandidate);
+      if (candPosInLine === -1) continue;
+
+      const posInDoc = (lastNewline !== -1 ? lastNewline + 1 : 0) + candPosInLine;
+      const docAfterCand = text.slice(posInDoc + cleanCandidate.length, posInDoc + cleanCandidate.length + 3);
+      if (docAfterCand.startsWith(']]')) continue;
+
+      for (const note of indexedNotes) {
+        if (editSlug && note.slug === editSlug) continue;
+
+        let score = 0;
+        const noteClean = note.cleanTitle;
+
+        if (noteClean === candLower) {
+          score = 100;
+        } else if (noteClean.startsWith(candLower) && candLower.length >= 4) {
+          score = 90;
+        } else if (note.tokens.some(tok => tok === candLower)) {
+          score = 85;
+        } else if (candLower.length >= 4 && note.tokens.some(tok => tok.startsWith(candLower))) {
+          score = 75;
+        } else if (candLower.length >= 5 && note.tokens.some(tok => isLevenshtein1(tok, candLower))) {
+          score = 65;
+        }
+
+        if (score > 0) {
+          bestMatches.push({
+            note,
+            score,
+            candidate: cleanCandidate,
+            startOffset: posInDoc,
+          });
+        }
+      }
+
+      if (bestMatches.length > 0) {
+        break;
+      }
+    }
+
+    if (bestMatches.length > 0) {
+      bestMatches.sort((a, b) => b.score - a.score || a.note.title.localeCompare(b.note.title));
+      const topMatch = bestMatches[0];
+      const uniqueNotes = Array.from(new Set(bestMatches.map(m => m.note))).slice(0, 4);
+
+      setLinkSuggestion({
+        suggestions: uniqueNotes,
+        startIndex: topMatch.startOffset,
+        endIndex: topMatch.startOffset + topMatch.candidate.length,
+        matchedText: topMatch.candidate,
+        isBracketMode: false,
+        field,
+      });
+    } else {
+      setLinkSuggestion(null);
+    }
+  };
+
+  const triggerFuzzyLinkCheck = (text: string, cursorPos: number, field: 'content' | 'abstract' | 'notes') => {
+    activeFieldRef.current = field;
+    if (linkCheckTimeoutRef.current) {
+      clearTimeout(linkCheckTimeoutRef.current);
+    }
+    linkCheckTimeoutRef.current = setTimeout(() => {
+      runLinkCheck(text, cursorPos, field);
+    }, 60);
   };
 
   // Insert or toggle unnumbered list on current line(s)
@@ -472,6 +779,25 @@ function EditorContent() {
   const handleEditorKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const ta = e.currentTarget;
     const { selectionStart, selectionEnd, value } = ta;
+
+    // Handle Link Suggestion Keyboard Shortcuts
+    if (linkSuggestion && linkSuggestion.suggestions.length > 0) {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        applyLinkSuggestion(linkSuggestion.suggestions[0]);
+        return;
+      }
+      if (e.key === 'Enter' && linkSuggestion.isBracketMode) {
+        e.preventDefault();
+        applyLinkSuggestion(linkSuggestion.suggestions[0]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setLinkSuggestion(null);
+        return;
+      }
+    }
 
     // Detect if current line is inside a markdown table
     const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1;
@@ -1296,7 +1622,7 @@ function EditorContent() {
               )}
 
               {/* Fuzzy Search Box & Dropdown */}
-              <div className="relative w-full sm:w-80">
+              <div className="relative w-full sm:w-80" ref={otherTagContainerRef}>
                 <div className="relative flex items-center">
                   <span className="absolute left-3 text-obsidian-textFaint text-xs font-mono">#</span>
                   <input
@@ -1560,7 +1886,7 @@ function EditorContent() {
           )}
 
           {/* Search / Input with Fuzzy Dropdown */}
-          <div className="relative w-full sm:w-96">
+          <div className="relative w-full sm:w-96" ref={subTagContainerRef}>
             <div className="relative flex items-center">
               <span className="absolute left-3 text-obsidian-textFaint text-xs font-mono">#</span>
               <input
@@ -1872,19 +2198,37 @@ function EditorContent() {
                   High-level summary / executive briefing
                 </span>
               </div>
-              <textarea
-                ref={abstractTextareaRef}
-                value={sessionAbstract}
-                onChange={e => setSessionAbstract(e.target.value)}
-                onKeyDown={handleEditorKeyDown}
-                onFocus={() => {
-                  activeFieldRef.current = 'abstract';
-                }}
-                onDragOver={e => e.preventDefault()}
-                onDrop={handleDrop}
-                placeholder="Write a concise executive summary or debrief of what transpired in this session..."
-                className="w-full h-36 bg-blue-950/30 border border-blue-800/50 rounded-lg p-3.5 text-sm font-sans text-blue-100 placeholder-blue-300/40 focus:outline-none focus:border-blue-500 leading-relaxed resize-y"
-              />
+              <div className="relative">
+                <textarea
+                  ref={abstractTextareaRef}
+                  value={sessionAbstract}
+                  onChange={e => {
+                    setSessionAbstract(e.target.value);
+                    triggerFuzzyLinkCheck(e.target.value, e.target.selectionStart, 'abstract');
+                  }}
+                  onClick={e => triggerFuzzyLinkCheck((e.target as HTMLTextAreaElement).value, (e.target as HTMLTextAreaElement).selectionStart, 'abstract')}
+                  onKeyUp={e => {
+                    if (e.key !== 'Tab' && e.key !== 'Escape' && e.key !== 'Enter') {
+                      triggerFuzzyLinkCheck((e.target as HTMLTextAreaElement).value, (e.target as HTMLTextAreaElement).selectionStart, 'abstract');
+                    }
+                  }}
+                  onKeyDown={handleEditorKeyDown}
+                  onFocus={() => {
+                    activeFieldRef.current = 'abstract';
+                  }}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={handleDrop}
+                  placeholder="Write a concise executive summary or debrief of what transpired in this session..."
+                  className="w-full h-36 bg-blue-950/30 border border-blue-800/50 rounded-lg p-3.5 text-sm font-sans text-blue-100 placeholder-blue-300/40 focus:outline-none focus:border-blue-500 leading-relaxed resize-y"
+                />
+                {linkSuggestion && linkSuggestion.field === 'abstract' && (
+                  <LinkSuggestionBox
+                    suggestion={linkSuggestion}
+                    onApply={applyLinkSuggestion}
+                    onDismiss={() => setLinkSuggestion(null)}
+                  />
+                )}
+              </div>
             </div>
 
             {/* 2. Notes Field (Clean Markdown Field) */}
@@ -1898,35 +2242,71 @@ function EditorContent() {
                   Detailed chronology, NPC encounters, dialogue, and secrets
                 </span>
               </div>
-              <textarea
-                ref={notesTextareaRef}
-                value={sessionNotes}
-                onChange={e => setSessionNotes(e.target.value)}
-                onKeyDown={handleEditorKeyDown}
-                onFocus={() => {
-                  activeFieldRef.current = 'notes';
-                }}
-                onDragOver={e => e.preventDefault()}
-                onDrop={handleDrop}
-                placeholder="Detailed session notes, bullet points, events, discoveries, and combat logs..."
-                className="w-full h-96 bg-obsidian-surface border border-obsidian-border rounded-xl p-4 text-sm font-mono text-white focus:outline-none focus:border-obsidian-purple leading-relaxed resize-y"
-              />
+              <div className="relative">
+                <textarea
+                  ref={notesTextareaRef}
+                  value={sessionNotes}
+                  onChange={e => {
+                    setSessionNotes(e.target.value);
+                    triggerFuzzyLinkCheck(e.target.value, e.target.selectionStart, 'notes');
+                  }}
+                  onClick={e => triggerFuzzyLinkCheck((e.target as HTMLTextAreaElement).value, (e.target as HTMLTextAreaElement).selectionStart, 'notes')}
+                  onKeyUp={e => {
+                    if (e.key !== 'Tab' && e.key !== 'Escape' && e.key !== 'Enter') {
+                      triggerFuzzyLinkCheck((e.target as HTMLTextAreaElement).value, (e.target as HTMLTextAreaElement).selectionStart, 'notes');
+                    }
+                  }}
+                  onKeyDown={handleEditorKeyDown}
+                  onFocus={() => {
+                    activeFieldRef.current = 'notes';
+                  }}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={handleDrop}
+                  placeholder="Detailed session notes, bullet points, events, discoveries, and combat logs..."
+                  className="w-full h-96 bg-obsidian-surface border border-obsidian-border rounded-xl p-4 text-sm font-mono text-white focus:outline-none focus:border-obsidian-purple leading-relaxed resize-y"
+                />
+                {linkSuggestion && linkSuggestion.field === 'notes' && (
+                  <LinkSuggestionBox
+                    suggestion={linkSuggestion}
+                    onApply={applyLinkSuggestion}
+                    onDismiss={() => setLinkSuggestion(null)}
+                  />
+                )}
+              </div>
             </div>
           </div>
         ) : (
-          <textarea
-            ref={textareaRef}
-            value={content}
-            onChange={e => setContent(e.target.value)}
-            onKeyDown={handleEditorKeyDown}
-            onFocus={() => {
-              activeFieldRef.current = 'content';
-            }}
-            onDragOver={e => e.preventDefault()}
-            onDrop={handleDrop}
-            placeholder="Write markdown here... Supports Obsidian callouts (> [!note]), image embeds (![[image.png]]), and wikilinks ([[Note Title]])."
-            className="w-full h-[550px] bg-obsidian-surface border border-obsidian-border rounded-xl p-4 text-sm font-mono text-white focus:outline-none focus:border-obsidian-purple leading-relaxed resize-y"
-          />
+          <div className="relative">
+            <textarea
+              ref={textareaRef}
+              value={content}
+              onChange={e => {
+                setContent(e.target.value);
+                triggerFuzzyLinkCheck(e.target.value, e.target.selectionStart, 'content');
+              }}
+              onClick={e => triggerFuzzyLinkCheck((e.target as HTMLTextAreaElement).value, (e.target as HTMLTextAreaElement).selectionStart, 'content')}
+              onKeyUp={e => {
+                if (e.key !== 'Tab' && e.key !== 'Escape' && e.key !== 'Enter') {
+                  triggerFuzzyLinkCheck((e.target as HTMLTextAreaElement).value, (e.target as HTMLTextAreaElement).selectionStart, 'content');
+                }
+              }}
+              onKeyDown={handleEditorKeyDown}
+              onFocus={() => {
+                activeFieldRef.current = 'content';
+              }}
+              onDragOver={e => e.preventDefault()}
+              onDrop={handleDrop}
+              placeholder="Write markdown here... Supports Obsidian callouts (> [!note]), image embeds (![[image.png]]), and wikilinks ([[Note Title]])."
+              className="w-full h-[550px] bg-obsidian-surface border border-obsidian-border rounded-xl p-4 text-sm font-mono text-white focus:outline-none focus:border-obsidian-purple leading-relaxed resize-y"
+            />
+            {linkSuggestion && linkSuggestion.field === 'content' && (
+              <LinkSuggestionBox
+                suggestion={linkSuggestion}
+                onApply={applyLinkSuggestion}
+                onDismiss={() => setLinkSuggestion(null)}
+              />
+            )}
+          </div>
         )}
       </div>
 
@@ -2199,6 +2579,66 @@ function EditorContent() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function LinkSuggestionBox({
+  suggestion,
+  onApply,
+  onDismiss,
+}: {
+  suggestion: LinkSuggestionState;
+  onApply: (note: NoteIndexItem) => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div
+      className="absolute right-3.5 bottom-3.5 z-30 max-w-[92%] sm:max-w-lg flex flex-wrap items-center gap-1.5 p-2 bg-obsidian-surface/95 backdrop-blur-md border border-obsidian-purpleBorder rounded-xl shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-150 select-none"
+      onMouseDown={e => e.stopPropagation()}
+    >
+      <div className="flex items-center space-x-1.5 text-xs text-obsidian-purpleLight font-semibold pr-1">
+        <Sparkles className="w-3.5 h-3.5 text-obsidian-purpleLight animate-pulse" />
+        <span className="hidden sm:inline">Link:</span>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5 max-w-full">
+        {suggestion.suggestions.slice(0, 3).map((n, idx) => (
+          <button
+            key={n.slug}
+            type="button"
+            onMouseDown={e => {
+              e.preventDefault();
+              onApply(n);
+            }}
+            className={`px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-all flex items-center space-x-1.5 cursor-pointer shadow-sm ${
+              idx === 0
+                ? 'bg-obsidian-purple text-white hover:bg-obsidian-purpleHover border border-purple-400/40 ring-1 ring-purple-500/30'
+                : 'bg-obsidian-card hover:bg-obsidian-hover text-zinc-300 hover:text-white border border-obsidian-border'
+            }`}
+            title={`Click or press Tab to link [[${n.title}]]`}
+          >
+            <span>[[{n.title}]]</span>
+            {idx === 0 && (
+              <span className="text-[10px] px-1 py-0.2 rounded bg-black/40 text-purple-200 font-sans font-normal border border-purple-300/30">
+                Tab
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      <button
+        type="button"
+        onMouseDown={e => {
+          e.preventDefault();
+          onDismiss();
+        }}
+        className="p-1 rounded-md text-obsidian-textFaint hover:text-white hover:bg-obsidian-card transition-colors ml-auto cursor-pointer"
+        title="Dismiss (Esc)"
+      >
+        <X className="w-3.5 h-3.5" />
+      </button>
     </div>
   );
 }

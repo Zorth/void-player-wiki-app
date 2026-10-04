@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getNoteBySlug, renderMarkdown, KNOWN_WORLDS, slugify, getCharacterAvatar } from '@/lib/vault';
-import { formatPlayerName } from '@/lib/constants';
+import { formatPlayerName, formatAuthors, formatAuthorName } from '@/lib/constants';
 import { getGuildCharacters, getGuildSessions, getGuildWorlds, getGuildQuests } from '@/lib/guild';
 import { getSession } from '@/lib/auth';
 import { formatDate } from '@/lib/date';
@@ -318,7 +318,7 @@ export default async function NotePage({ params }: { params: { slug: string } })
           {note.authors.length > 0 ? (
             <div className="flex items-center space-x-1.5">
               <User className="w-3.5 h-3.5 text-obsidian-textFaint" />
-              <span>Contributed by <strong className="text-white">{note.authors.join(', ')}</strong></span>
+              <span>Contributed by <strong className="text-white">{formatAuthors(note.authors)}</strong></span>
             </div>
           ) : isSession ? (
             <div className="flex items-center space-x-1.5 text-amber-300/90 font-medium">
@@ -651,7 +651,7 @@ export default async function NotePage({ params }: { params: { slug: string } })
       )}
 
       {/* Comments Section */}
-      <CommentsSection noteSlug={note.slug} />
+      <CommentsSection noteSlug={note.slug} initialUser={session} />
     </article>
   );
 }

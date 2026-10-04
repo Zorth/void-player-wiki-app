@@ -22,40 +22,70 @@ const MIME_MAP: Record<string, string> = {
   '.svg': 'image/svg+xml',
 };
 
+// In-memory cache for attachment locations: safeFilename.toLowerCase() -> filePath
+const attachmentCache = new Map<string, string>();
+let lastAttachmentScan = 0;
+const ATTACHMENT_SCAN_TTL = 60 * 1000;
+
+function refreshAttachmentCache() {
+  const now = Date.now();
+  if (now - lastAttachmentScan < ATTACHMENT_SCAN_TTL && attachmentCache.size > 0) {
+    return;
+  }
+  attachmentCache.clear();
+  for (const dir of SEARCH_DIRS) {
+    if (!fs.existsSync(dir)) continue;
+    try {
+      const files = fs.readdirSync(dir);
+      for (const f of files) {
+        if (f.endsWith('.md')) continue;
+        const full = path.join(dir, f);
+        try {
+          if (!fs.statSync(full).isDirectory()) {
+            const fLower = f.toLowerCase();
+            if (!attachmentCache.has(fLower)) {
+              attachmentCache.set(fLower, full);
+            }
+          }
+        } catch {}
+      }
+    } catch {}
+  }
+  lastAttachmentScan = now;
+}
+
 export async function GET(req: NextRequest, { params }: { params: { filename: string } }) {
   const filename = decodeURIComponent(params.filename);
 
   // Security: prevent path traversal
   const safeFilename = path.basename(filename);
+  const lowerName = safeFilename.toLowerCase();
   let filePath: string | null = null;
 
+  // 1. Direct path check across search dirs
   for (const dir of SEARCH_DIRS) {
-    if (!fs.existsSync(dir)) continue;
-
     const directPath = path.join(dir, safeFilename);
-    if (fs.existsSync(directPath) && !fs.statSync(directPath).isDirectory()) {
-      filePath = directPath;
-      break;
-    }
-
-    try {
-      const allFiles = fs.readdirSync(dir);
-      let matched = allFiles.find(f => f.toLowerCase() === safeFilename.toLowerCase());
-      if (!matched) {
-        const baseWithoutExt = safeFilename.substring(0, safeFilename.lastIndexOf('.')) || safeFilename;
-        matched = allFiles.find(f => f.toLowerCase() === `${baseWithoutExt.toLowerCase()}.webp`);
-      }
-      if (matched) {
-        const candidate = path.join(dir, matched);
-        if (fs.existsSync(candidate) && !fs.statSync(candidate).isDirectory()) {
-          filePath = candidate;
+    if (fs.existsSync(directPath)) {
+      try {
+        if (!fs.statSync(directPath).isDirectory()) {
+          filePath = directPath;
           break;
         }
-      }
-    } catch {}
+      } catch {}
+    }
   }
 
-  if (!fs.existsSync(filePath)) {
+  // 2. Check in-memory attachment cache
+  if (!filePath) {
+    refreshAttachmentCache();
+    filePath = attachmentCache.get(lowerName) || null;
+    if (!filePath) {
+      const baseWithoutExt = lowerName.substring(0, lowerName.lastIndexOf('.')) || lowerName;
+      filePath = attachmentCache.get(`${baseWithoutExt}.webp`) || null;
+    }
+  }
+
+  if (!filePath || !fs.existsSync(filePath)) {
     return new NextResponse('File Not Found', {
       status: 404,
       headers: {

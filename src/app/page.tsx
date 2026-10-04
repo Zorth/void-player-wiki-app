@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { getAllNotes, getSessionReports, KNOWN_WORLDS, formatInlineMarkdown } from '@/lib/vault';
+import { formatAuthors } from '@/lib/constants';
 import { getGuildWorlds, getGuildSessions, getGuildQuests } from '@/lib/guild';
 import { getSession } from '@/lib/auth';
 import {
@@ -26,12 +27,15 @@ import {
 export const dynamic = 'force-dynamic';
 
 export default async function HomePage() {
-  const session = await getSession();
   const allNotes = getAllNotes();
   const sessions = getSessionReports(undefined, true).slice(0, 4);
-  const guildWorlds = await getGuildWorlds();
-  const guildSessions = await getGuildSessions();
-  const guildQuests = await getGuildQuests();
+
+  const [session, guildWorlds, guildSessions, guildQuests] = await Promise.all([
+    getSession(),
+    getGuildWorlds(),
+    getGuildSessions(),
+    getGuildQuests(),
+  ]);
 
   const questBySessionDate = new Map<string, string>();
   for (const gs of guildSessions) {
@@ -465,7 +469,7 @@ export default async function HomePage() {
               </div>
 
               <div className="mt-4 pt-3 border-t border-obsidian-borderSubtle flex items-center justify-between text-xs text-obsidian-textFaint">
-                <span>{s.authors.length > 0 ? `By ${s.authors.join(', ')}` : 'Campaign Log'}</span>
+                <span>{s.authors.length > 0 ? `By ${formatAuthors(s.authors)}` : 'Campaign Log'}</span>
                 <span className="text-obsidian-purpleLight font-medium">Read Report &rarr;</span>
               </div>
             </Link>

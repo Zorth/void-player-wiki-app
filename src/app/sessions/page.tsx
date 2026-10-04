@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { getSessionReports, KNOWN_WORLDS, formatInlineMarkdown } from '@/lib/vault';
+import { formatAuthors } from '@/lib/constants';
 import { getGuildSessions, getGuildCharacters, getGuildQuests } from '@/lib/guild';
 import { Calendar, Compass, Users, Coins, MessageSquare, PlusCircle, FilePenLine, CheckCircle2, Scroll } from 'lucide-react';
 
@@ -12,9 +13,12 @@ export default async function SessionsPage({
 }) {
   const worldFilter = searchParams.world || 'All';
   const sessions = getSessionReports(worldFilter);
-  const guildSessions = await getGuildSessions();
-  const guildChars = await getGuildCharacters();
-  const guildQuests = await getGuildQuests();
+
+  const [guildSessions, guildChars, guildQuests] = await Promise.all([
+    getGuildSessions(),
+    getGuildCharacters(),
+    getGuildQuests(),
+  ]);
 
   const charMap = new Map(guildChars.map(c => [c._id, c.name]));
 
@@ -207,7 +211,7 @@ export default async function SessionsPage({
                     )}
                     {s.authors.length > 0 && (
                       <span className="text-[11px] text-obsidian-textFaint">
-                        By {s.authors.join(', ')}
+                        By {formatAuthors(s.authors)}
                       </span>
                     )}
                   </div>
