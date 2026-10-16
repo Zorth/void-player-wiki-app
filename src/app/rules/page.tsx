@@ -160,6 +160,7 @@ export default async function RulesPage() {
     { title: 'Void Objective', slug: 'void-objective', summary: 'Server-wide monthly community objectives and gold reward scaling.' },
     { title: 'Earn Income', slug: 'earnincome', summary: 'PF2e task levels, wage tables, and weekly income calculation.' },
     { title: 'Craft an Item', slug: 'crafting', summary: 'Crafting mechanics, formulas, rush work, and item repair.' },
+    { title: 'Inventor Feat', slug: 'inventor', summary: 'Downtime inventing checks, same-session crafting, and sharing formula rules.' },
     { title: 'Learn a Spell', slug: 'learnspell', summary: 'Spellbook expansion costs and study requirements for casters.' },
     { title: 'Treasure & Loot', slug: 'treasure', summary: 'Expedition loot budgets, magic item ratios, and gold distribution.' },
     { title: 'Death & Resurrection', slug: 'death', summary: 'Character death rituals, resurrection costs, and backup characters.' },
@@ -245,8 +246,8 @@ export default async function RulesPage() {
               { label: 'Downtime Activities', slug: 'downtime' },
               { label: 'Earn Income', slug: 'earnincome' },
               { label: 'Crafting', slug: 'crafting' },
+              { label: 'Inventor Feat', slug: 'inventor' },
               { label: 'Treasure & Loot', slug: 'treasure' },
-              { label: 'Void Objective', slug: 'void-objective' },
             ]}
           />
 
@@ -277,7 +278,7 @@ export default async function RulesPage() {
             </h2>
           </div>
           <span className="text-xs text-obsidian-textFaint">
-            Directory of all 25 living world rules and compendium articles
+            Directory of all 26 living world rules and compendium articles
           </span>
         </div>
 
