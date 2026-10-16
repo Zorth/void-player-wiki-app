@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { getAllNotes, getSessionReports, KNOWN_WORLDS, formatInlineMarkdown } from '@/lib/vault';
 import { formatAuthors } from '@/lib/constants';
-import { getGuildWorlds, getGuildSessions, getGuildQuests } from '@/lib/guild';
+import { getGuildWorlds, getGuildSessions, getGuildQuests, findGuildSessionForNote } from '@/lib/guild';
 import { getSession } from '@/lib/auth';
 import {
   Compass,
@@ -29,7 +29,6 @@ export const dynamic = 'force-dynamic';
 export default async function HomePage() {
   const allNotes = getAllNotes();
   const sessions = getSessionReports(undefined, true).slice(0, 4);
-
   const [session, guildWorlds, guildSessions, guildQuests] = await Promise.all([
     getSession(),
     getGuildWorlds(),
@@ -37,16 +36,7 @@ export default async function HomePage() {
     getGuildQuests(),
   ]);
 
-  const questBySessionDate = new Map<string, string>();
-  for (const gs of guildSessions) {
-    if (gs.date && gs.questId) {
-      const q = guildQuests.find(quest => quest._id === gs.questId);
-      if (q) {
-        const dStr = new Date(gs.date).toISOString().split('T')[0];
-        questBySessionDate.set(dStr, q.name);
-      }
-    }
-  }
+  const questMap = new Map(guildQuests.map(q => [q._id, q.name]));
 
   const guildWorldMap = new Map(guildWorlds.map(w => [w.name.toLowerCase(), w]));
 
@@ -430,50 +420,55 @@ export default async function HomePage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {sessions.map(s => (
-            <Link
-              key={s.slug}
-              href={`/notes/${s.slug}`}
-              className="p-5 rounded-xl bg-obsidian-surface border border-obsidian-border hover:border-obsidian-purpleBorder hover:bg-obsidian-card transition-all flex flex-col justify-between"
-            >
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center space-x-2 text-xs text-obsidian-textFaint">
-                    <Calendar className="w-3.5 h-3.5" />
-                    <span>{s.date || 'Unknown Date'}</span>
+          {sessions.map(s => {
+            const gs = findGuildSessionForNote(s, guildSessions, guildWorlds);
+            const questName = gs?.questId ? questMap.get(gs.questId) : null;
+
+            return (
+              <Link
+                key={s.slug}
+                href={`/notes/${s.slug}`}
+                className="p-5 rounded-xl bg-obsidian-surface border border-obsidian-border hover:border-obsidian-purpleBorder hover:bg-obsidian-card transition-all flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center space-x-2 text-xs text-obsidian-textFaint">
+                      <Calendar className="w-3.5 h-3.5" />
+                      <span>{s.date || 'Unknown Date'}</span>
+                    </div>
+                    {s.worlds.map(w => (
+                      <span key={w} className="text-[11px] px-2 py-0.5 rounded bg-purple-950/40 text-purple-300 border border-purple-800/40">
+                        {w}
+                      </span>
+                    ))}
                   </div>
-                  {s.worlds.map(w => (
-                    <span key={w} className="text-[11px] px-2 py-0.5 rounded bg-purple-950/40 text-purple-300 border border-purple-800/40">
-                      {w}
-                    </span>
-                  ))}
+
+                  <h3 className="font-semibold text-base text-white hover:text-obsidian-purpleLight transition-colors line-clamp-1">
+                    {s.title}
+                  </h3>
+
+                  {questName && (
+                    <div className="mt-1 flex items-center space-x-1.5 text-xs text-emerald-300 font-medium">
+                      <Scroll className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span className="truncate">{questName}</span>
+                    </div>
+                  )}
+
+                  {s.abstract && (
+                    <div
+                      className="mt-2 text-xs text-obsidian-textMuted line-clamp-2 leading-relaxed [&_a]:text-obsidian-purpleLight [&_a]:hover:underline [&_strong]:text-zinc-200"
+                      dangerouslySetInnerHTML={{ __html: formatInlineMarkdown(s.abstract) }}
+                    />
+                  )}
                 </div>
-
-                <h3 className="font-semibold text-base text-white hover:text-obsidian-purpleLight transition-colors line-clamp-1">
-                  {s.title}
-                </h3>
-
-                {s.date && questBySessionDate.has(s.date) && (
-                  <div className="mt-1 flex items-center space-x-1.5 text-xs text-emerald-300 font-medium">
-                    <Scroll className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    <span className="truncate">{questBySessionDate.get(s.date)}</span>
-                  </div>
-                )}
-
-                {s.abstract && (
-                  <div
-                    className="mt-2 text-xs text-obsidian-textMuted line-clamp-2 leading-relaxed [&_a]:text-obsidian-purpleLight [&_a]:hover:underline [&_strong]:text-zinc-200"
-                    dangerouslySetInnerHTML={{ __html: formatInlineMarkdown(s.abstract) }}
-                  />
-                )}
-              </div>
 
               <div className="mt-4 pt-3 border-t border-obsidian-borderSubtle flex items-center justify-between text-xs text-obsidian-textFaint">
                 <span>{s.authors.length > 0 ? `By ${formatAuthors(s.authors)}` : 'Campaign Log'}</span>
                 <span className="text-obsidian-purpleLight font-medium">Read Report &rarr;</span>
               </div>
             </Link>
-          ))}
+          );
+        })}
         </div>
       </section>
     </div>

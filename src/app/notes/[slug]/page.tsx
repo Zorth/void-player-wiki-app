@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getNoteBySlug, renderMarkdown, KNOWN_WORLDS, slugify, getCharacterAvatar } from '@/lib/vault';
 import { formatPlayerName, formatAuthors, formatAuthorName } from '@/lib/constants';
-import { getGuildCharacters, getGuildSessions, getGuildWorlds, getGuildQuests } from '@/lib/guild';
+import { getGuildCharacters, getGuildSessions, getGuildWorlds, getGuildQuests, findGuildSessionForNote } from '@/lib/guild';
 import { getSession } from '@/lib/auth';
 import { formatDate } from '@/lib/date';
 import CommentsSection from '@/components/CommentsSection';
@@ -94,11 +94,7 @@ export default async function NotePage({ params }: { params: { slug: string } })
   // Check if session note
   const isSession = note.category === 'session-report' || note.tags.includes('session');
   const matchedSession = isSession
-    ? guildSessions.find(
-        s =>
-          (note.date && new Date(s.date).toISOString().split('T')[0] === note.date) ||
-          (note.rawContent && note.rawContent.includes(s._id))
-      )
+    ? findGuildSessionForNote(note, guildSessions, guildWorlds)
     : null;
 
   // Check if quest linked to the session

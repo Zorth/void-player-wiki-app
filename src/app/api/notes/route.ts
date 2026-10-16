@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { category, title, content, worlds, tags, authors, existingFilePath, date, image, guildCharacterId } = body;
+  const { category, title, content, worlds, tags, authors, existingFilePath, date, image, guildCharacterId, guildSessionId } = body;
 
   if (!title || !title.trim()) {
     return NextResponse.json({ error: 'Title is required' }, { status: 400 });
@@ -33,7 +33,8 @@ export async function POST(req: NextRequest) {
       existingFilePath,
       date,
       image,
-      guildCharacterId
+      guildCharacterId,
+      guildSessionId
     );
     return NextResponse.json({ success: true, ...result });
   } catch (err: any) {

@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getNotesByWorld, getSessionReports, getAllNotes, KNOWN_WORLDS, renderMarkdown, slugify, formatInlineMarkdown } from '@/lib/vault';
 import { formatAuthors } from '@/lib/constants';
-import { getGuildWorlds, getGuildSessions, getGuildQuests } from '@/lib/guild';
+import { getGuildWorlds, getGuildSessions, getGuildQuests, findGuildSessionForNote } from '@/lib/guild';
 import { getSession } from '@/lib/auth';
 import CommentsSection from '@/components/CommentsSection';
 import { Compass, ExternalLink, Calendar, MapPin, Users, Flag, BookOpen, ScrollText, Edit, User, Clock, Scroll } from 'lucide-react';
@@ -43,16 +43,7 @@ export default async function WorldPage({ params }: { params: { world: string } 
   const notes = getNotesByWorld(worldName);
   const worldSessions = getSessionReports(worldName);
 
-  const questBySessionDate = new Map<string, string>();
-  for (const gs of guildSessions) {
-    if (gs.date && gs.questId) {
-      const q = guildQuests.find(quest => quest._id === gs.questId);
-      if (q) {
-        const dStr = new Date(gs.date).toISOString().split('T')[0];
-        questBySessionDate.set(dStr, q.name);
-      }
-    }
-  }
+  const questMap = new Map(guildQuests.map(q => [q._id, q.name]));
 
   const guildData = guildWorlds.find(w => w.name.toLowerCase() === worldName.toLowerCase());
 
@@ -249,33 +240,38 @@ export default async function WorldPage({ params }: { params: { world: string } 
           <p className="text-sm text-obsidian-textFaint">No session reports recorded in {worldName} yet.</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {worldSessions.map(s => (
-              <Link
-                key={s.slug}
-                href={`/notes/${s.slug}`}
-                className="p-4 rounded-xl bg-obsidian-surface border border-obsidian-border hover:border-obsidian-purpleBorder hover:bg-obsidian-card transition-all"
-              >
-                <div className="flex items-center space-x-2 text-xs text-obsidian-textFaint mb-1.5">
-                  <Calendar className="w-3.5 h-3.5" />
-                  <span>{s.date || 'Unknown Date'}</span>
-                </div>
-                <div className="font-semibold text-white hover:text-obsidian-purpleLight transition-colors">
-                  {s.title}
-                </div>
-                {s.date && questBySessionDate.has(s.date) && (
-                  <div className="mt-1 flex items-center space-x-1.5 text-xs text-emerald-300 font-medium">
-                    <Scroll className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    <span className="truncate">{questBySessionDate.get(s.date)}</span>
+            {worldSessions.map(s => {
+              const gs = findGuildSessionForNote(s, guildSessions, guildWorlds);
+              const questName = gs?.questId ? questMap.get(gs.questId) : null;
+
+              return (
+                <Link
+                  key={s.slug}
+                  href={`/notes/${s.slug}`}
+                  className="p-4 rounded-xl bg-obsidian-surface border border-obsidian-border hover:border-obsidian-purpleBorder hover:bg-obsidian-card transition-all"
+                >
+                  <div className="flex items-center space-x-2 text-xs text-obsidian-textFaint mb-1.5">
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span>{s.date || 'Unknown Date'}</span>
                   </div>
-                )}
-                {s.abstract && (
-                  <div
-                    className="text-xs text-obsidian-textMuted mt-1 line-clamp-2 [&_a]:text-obsidian-purpleLight [&_a]:hover:underline [&_strong]:text-zinc-200"
-                    dangerouslySetInnerHTML={{ __html: formatInlineMarkdown(s.abstract) }}
-                  />
-                )}
-              </Link>
-            ))}
+                  <div className="font-semibold text-white hover:text-obsidian-purpleLight transition-colors">
+                    {s.title}
+                  </div>
+                  {questName && (
+                    <div className="mt-1 flex items-center space-x-1.5 text-xs text-emerald-300 font-medium">
+                      <Scroll className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span className="truncate">{questName}</span>
+                    </div>
+                  )}
+                  {s.abstract && (
+                    <div
+                      className="text-xs text-obsidian-textMuted mt-1 line-clamp-2 [&_a]:text-obsidian-purpleLight [&_a]:hover:underline [&_strong]:text-zinc-200"
+                      dangerouslySetInnerHTML={{ __html: formatInlineMarkdown(s.abstract) }}
+                    />
+                  )}
+                </Link>
+              );
+            })}
           </div>
         )}
       </section>

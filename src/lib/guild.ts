@@ -143,3 +143,71 @@ export async function getGuildQuests(): Promise<GuildQuest[]> {
   return cachedQuests?.data || [];
 }
 
+export function findGuildSessionForNote(
+  note: {
+    guildSessionId?: string;
+    date?: string;
+    worlds?: string[];
+    rawContent?: string;
+  },
+  guildSessions: GuildSession[],
+  worlds: GuildWorld[]
+): GuildSession | null {
+  // 1. Exact match by guildSessionId
+  if (note.guildSessionId) {
+    const match = guildSessions.find(gs => gs._id === note.guildSessionId);
+    if (match) return match;
+  }
+
+  // 2. Exact match in rawContent if session ID is present
+  if (note.rawContent) {
+    const contentMatch = guildSessions.find(gs => note.rawContent!.includes(gs._id));
+    if (contentMatch) return contentMatch;
+  }
+
+  const worldIdToName = new Map(worlds.map(w => [w._id, w.name.toLowerCase()]));
+
+  // 3. Match by date AND world
+  if (note.date && note.worlds && note.worlds.length > 0) {
+    const noteWorldsLower = note.worlds.map(w => w.toLowerCase());
+    const dateWorldMatches = guildSessions.filter(gs => {
+      if (!gs.date) return false;
+      const gsDateStr = new Date(gs.date).toISOString().split('T')[0];
+      if (gsDateStr !== note.date) return false;
+      const gsWorldName = (gs.world ? worldIdToName.get(gs.world) : '') || '';
+      return noteWorldsLower.includes(gsWorldName);
+    });
+
+    if (dateWorldMatches.length === 1) {
+      return dateWorldMatches[0];
+    } else if (dateWorldMatches.length > 1 && note.rawContent) {
+      // Tie-break by character match in content
+      const ranked = dateWorldMatches.map(gs => {
+        let hits = 0;
+        if (gs.characters) {
+          for (const cid of gs.characters) {
+            if (note.rawContent!.includes(cid)) hits++;
+          }
+        }
+        return { gs, hits };
+      });
+      ranked.sort((a, b) => b.hits - a.hits);
+      if (ranked[0].hits > 0) return ranked[0].gs;
+      return dateWorldMatches[0];
+    }
+  }
+
+  // 4. Fallback: match by date alone if unambiguous
+  if (note.date) {
+    const dateMatches = guildSessions.filter(gs => {
+      if (!gs.date) return false;
+      return new Date(gs.date).toISOString().split('T')[0] === note.date;
+    });
+    if (dateMatches.length === 1) {
+      return dateMatches[0];
+    }
+  }
+
+  return null;
+}
+

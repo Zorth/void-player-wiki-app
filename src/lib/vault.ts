@@ -13,6 +13,7 @@ export interface NoteMetadata {
   category: 'world-note' | 'session-report' | 'character' | 'guide';
   worlds: string[];
   tags: string[];
+  aliases?: string[];
   authors: string[];
   date?: string;
   abstract?: string;
@@ -20,6 +21,7 @@ export interface NoteMetadata {
   updatedAt: string;
   rawContent: string;
   guildCharacterId?: string;
+  guildSessionId?: string;
   image?: string;
   hasReport?: boolean;
 }
@@ -206,123 +208,158 @@ function buildVaultIndex(): VaultIndex {
       { dir: 'Session Reports', cat: 'session-report' },
       { dir: 'Player Characters', cat: 'character' },
       { dir: '_META', cat: 'guide' },
+      { dir: 'tags', cat: 'guide' },
       { dir: '.', cat: 'guide' },
     ];
+
+    function processFile(fullPath: string, f: string, cat: NoteMetadata['category']) {
+      const stat = fs.statSync(fullPath);
+      if (stat.isDirectory()) return;
+      const fileContent = fs.readFileSync(fullPath, 'utf-8');
+
+      const parsed = matter(fileContent);
+      const baseName = f.replace(/\.md$/, '');
+      const slug = slugify(baseName);
+
+      // Determine Title
+      let title = parsed.data.title;
+      if (!title || typeof title !== 'string' || !title.trim()) {
+        const h1Match = parsed.content.match(/^#\s+(.+)$/m);
+        title = h1Match ? h1Match[1].trim() : baseName;
+      }
+
+      // Determine Date for Session Reports
+      let date = parsed.data.date;
+      if (!date && cat === 'session-report') {
+        const dateMatch = baseName.match(/(\d{4}-\d{2}-\d{2})/);
+        if (dateMatch) date = dateMatch[1];
+      }
+      if (date instanceof Date) {
+        date = date.toISOString().split('T')[0];
+      }
+
+      // Determine Abstract
+      const absMatch = parsed.content.match(/>\s*\[!abstract\]\s*\n((?:>.*\n?)+)/i);
+      let abstract = '';
+      if (absMatch) {
+        const text = absMatch[1].replace(/>/g, '').replace(/\n/g, ' ').trim();
+        if (!/^session report for the expedition in/i.test(text)) {
+          abstract = text;
+        }
+      }
+
+      const worlds = extractWorlds(parsed.data, parsed.content, title, cat);
+      const tags = extractTags(parsed.data, parsed.content);
+      const authors = extractAuthors(parsed.data);
+
+      const aliases: string[] = [];
+      if (Array.isArray(parsed.data.aliases)) {
+        parsed.data.aliases.forEach((a: any) => {
+          if (typeof a === 'string' && a.trim()) aliases.push(a.trim());
+        });
+      } else if (typeof parsed.data.aliases === 'string' && parsed.data.aliases.trim()) {
+        aliases.push(parsed.data.aliases.trim());
+      }
+      if (typeof parsed.data.alias === 'string' && parsed.data.alias.trim()) {
+        aliases.push(parsed.data.alias.trim());
+      } else if (Array.isArray(parsed.data.alias)) {
+        parsed.data.alias.forEach((a: any) => {
+          if (typeof a === 'string' && a.trim()) aliases.push(a.trim());
+        });
+      }
+
+      const guildCharacterId = parsed.data.guildCharacterId ? String(parsed.data.guildCharacterId).trim() : undefined;
+      const guildSessionId = parsed.data.guildSessionId ? String(parsed.data.guildSessionId).trim() : undefined;
+
+      let image: string | undefined = undefined;
+      if (parsed.data.image && typeof parsed.data.image === 'string' && parsed.data.image.toLowerCase() !== 'null') {
+        image = parsed.data.image.trim();
+      } else {
+        const imgMatch = parsed.content.match(/!\[\[([^\]]+\.(?:png|jpe?g|webp|gif|svg))(?:\s*\|.*?)?\]\]/i);
+        if (imgMatch) {
+          image = imgMatch[1].trim();
+        } else {
+          const mdImgMatch = parsed.content.match(/!\[.*?\]\(([^)\s]+\.(?:png|jpe?g|webp|gif|svg))\)/i);
+          if (mdImgMatch) {
+            image = mdImgMatch[1].trim();
+          }
+        }
+      }
+
+      let hasReport = true;
+      if (cat === 'session-report' || tags.includes('session')) {
+        let hasSubstance = false;
+        if (authors.length > 0) {
+          hasSubstance = true;
+        } else if (abstract && abstract.trim().length > 0) {
+          hasSubstance = true;
+        } else {
+          let body = parsed.content.replace(/^#\s+[^\n]*\n*/, '');
+          body = body.replace(/>[^\n]*\n?/g, '');
+          body = body.replace(/##\s+\[\[pc\|Player Character\]\]s[\s\S]*?(?=\n##|$)/i, '');
+          body = body.replace(/##\s+Player Characters[\s\S]*?(?=\n##|$)/i, '');
+          body = body.replace(/##\s*Notes\s*([\s\S]*)/i, (_, notes) => {
+            return notes.replace(/^[\s-*]+$/gm, '').trim();
+          });
+          const cleanBody = body.replace(/#[^\n]*/g, '').replace(/^[\s-*]+$/gm, '').trim();
+          hasSubstance = cleanBody.length > 20;
+        }
+        hasReport = hasSubstance;
+      }
+
+      let finalTitle = title;
+      if (cat === 'session-report' || tags.includes('session')) {
+        const sessionDateStr = date ? String(date).trim() : '';
+        const sessionWorld = worlds.length > 0 ? worlds[0].toUpperCase() : '';
+        if (title && sessionDateStr && title.startsWith(sessionDateStr)) {
+          finalTitle = title;
+        } else if (sessionDateStr && sessionWorld) {
+          finalTitle = `${sessionDateStr} ${sessionWorld}`;
+        } else if (sessionDateStr) {
+          finalTitle = sessionDateStr;
+        }
+      }
+
+      notes.push({
+        slug,
+        title: finalTitle,
+        category: cat,
+        worlds,
+        tags,
+        aliases,
+        authors,
+        date: date ? String(date) : undefined,
+        abstract: abstract || undefined,
+        filePath: path.relative(VAULT_PATH, fullPath),
+        updatedAt: stat.mtime.toISOString(),
+        rawContent: parsed.content,
+        guildCharacterId,
+        guildSessionId,
+        image,
+        hasReport,
+      });
+    }
 
     for (const { dir, cat } of categories) {
       const fullDir = path.join(VAULT_PATH, dir);
       if (!fs.existsSync(fullDir)) continue;
 
-      const files = fs.readdirSync(fullDir);
-      for (const f of files) {
-        if (!f.endsWith('.md')) continue;
-        if (dir === '.' && (f.startsWith('.') || f.startsWith('all_') || f.startsWith('linked_'))) continue;
-        const fullPath = path.join(fullDir, f);
-        const stat = fs.statSync(fullPath);
-        if (stat.isDirectory()) continue;
-        const fileContent = fs.readFileSync(fullPath, 'utf-8');
-
-        const parsed = matter(fileContent);
-        const baseName = f.replace(/\.md$/, '');
-        const slug = slugify(baseName);
-
-        // Determine Title
-        let title = parsed.data.title;
-        if (!title || typeof title !== 'string' || !title.trim()) {
-          const h1Match = parsed.content.match(/^#\s+(.+)$/m);
-          title = h1Match ? h1Match[1].trim() : baseName;
-        }
-
-        // Determine Date for Session Reports
-        let date = parsed.data.date;
-        if (!date && cat === 'session-report') {
-          const dateMatch = baseName.match(/(\d{4}-\d{2}-\d{2})/);
-          if (dateMatch) date = dateMatch[1];
-        }
-        if (date instanceof Date) {
-          date = date.toISOString().split('T')[0];
-        }
-
-        // Determine Abstract
-        const absMatch = parsed.content.match(/>\s*\[!abstract\]\s*\n((?:>.*\n?)+)/i);
-        let abstract = '';
-        if (absMatch) {
-          const text = absMatch[1].replace(/>/g, '').replace(/\n/g, ' ').trim();
-          if (!/^session report for the expedition in/i.test(text)) {
-            abstract = text;
-          }
-        }
-
-        const worlds = extractWorlds(parsed.data, parsed.content, title, cat);
-        const tags = extractTags(parsed.data, parsed.content);
-        const authors = extractAuthors(parsed.data);
-
-        const guildCharacterId = parsed.data.guildCharacterId ? String(parsed.data.guildCharacterId).trim() : undefined;
-
-        let image: string | undefined = undefined;
-        if (parsed.data.image && typeof parsed.data.image === 'string' && parsed.data.image.toLowerCase() !== 'null') {
-          image = parsed.data.image.trim();
-        } else {
-          const imgMatch = parsed.content.match(/!\[\[([^\]]+\.(?:png|jpe?g|webp|gif|svg))(?:\s*\|.*?)?\]\]/i);
-          if (imgMatch) {
-            image = imgMatch[1].trim();
-          } else {
-            const mdImgMatch = parsed.content.match(/!\[.*?\]\(([^)\s]+\.(?:png|jpe?g|webp|gif|svg))\)/i);
-            if (mdImgMatch) {
-              image = mdImgMatch[1].trim();
+      function walk(currentDir: string) {
+        const files = fs.readdirSync(currentDir);
+        for (const f of files) {
+          if (dir === '.' && (f.startsWith('.') || f.startsWith('all_') || f.startsWith('linked_'))) continue;
+          const fullPath = path.join(currentDir, f);
+          const stat = fs.statSync(fullPath);
+          if (stat.isDirectory()) {
+            if (dir !== '.') {
+              walk(fullPath);
             }
+          } else if (f.endsWith('.md')) {
+            processFile(fullPath, f, cat);
           }
         }
-
-        let hasReport = true;
-        if (cat === 'session-report' || tags.includes('session')) {
-          let hasSubstance = false;
-          if (authors.length > 0) {
-            hasSubstance = true;
-          } else if (abstract && abstract.trim().length > 0) {
-            hasSubstance = true;
-          } else {
-            let body = parsed.content.replace(/^#\s+[^\n]*\n*/, '');
-            body = body.replace(/>[^\n]*\n?/g, '');
-            body = body.replace(/##\s+\[\[pc\|Player Character\]\]s[\s\S]*?(?=\n##|$)/i, '');
-            body = body.replace(/##\s+Player Characters[\s\S]*?(?=\n##|$)/i, '');
-            body = body.replace(/##\s*Notes\s*([\s\S]*)/i, (_, notes) => {
-              return notes.replace(/^[\s-*]+$/gm, '').trim();
-            });
-            const cleanBody = body.replace(/#[^\n]*/g, '').replace(/^[\s-*]+$/gm, '').trim();
-            hasSubstance = cleanBody.length > 20;
-          }
-          hasReport = hasSubstance;
-        }
-
-        let finalTitle = title;
-        if (cat === 'session-report' || tags.includes('session')) {
-          const sessionDateStr = date ? String(date).trim() : '';
-          const sessionWorld = worlds.length > 0 ? worlds[0].toUpperCase() : '';
-          if (sessionDateStr && sessionWorld) {
-            finalTitle = `${sessionDateStr} ${sessionWorld}`;
-          } else if (sessionDateStr) {
-            finalTitle = sessionDateStr;
-          }
-        }
-
-        notes.push({
-          slug,
-          title: finalTitle,
-          category: cat,
-          worlds,
-          tags,
-          authors,
-          date: date ? String(date) : undefined,
-          abstract: abstract || undefined,
-          filePath: path.relative(VAULT_PATH, fullPath),
-          updatedAt: stat.mtime.toISOString(),
-          rawContent: parsed.content,
-          guildCharacterId,
-          image,
-          hasReport,
-        });
       }
+      walk(fullDir);
     }
   }
 
@@ -351,7 +388,25 @@ function buildVaultIndex(): VaultIndex {
 
     // Title map for wikilink resolution
     if (!titleToSlugMap.has(titleLower)) titleToSlugMap.set(titleLower, n.slug);
+    if (!titleToSlugMap.has(slugClean)) titleToSlugMap.set(slugClean, n.slug);
+    if (!titleToSlugMap.has(normTarget)) titleToSlugMap.set(normTarget, n.slug);
     if (!titleToSlugMap.has(baseLower)) titleToSlugMap.set(baseLower, n.slug);
+
+    if (n.aliases && Array.isArray(n.aliases)) {
+      for (const a of n.aliases) {
+        if (typeof a === 'string' && a.trim()) {
+          const aClean = a.toLowerCase().trim();
+          const aSlug = slugify(aClean);
+          const aNorm = aSlug.replace(/^_+/, '').replace(/_/g, '-');
+          if (!bySlug.has(aClean)) bySlug.set(aClean, n);
+          if (!bySlug.has(aSlug)) bySlug.set(aSlug, n);
+          if (!bySlug.has(aNorm)) bySlug.set(aNorm, n);
+          if (!titleToSlugMap.has(aClean)) titleToSlugMap.set(aClean, n.slug);
+          if (!titleToSlugMap.has(aSlug)) titleToSlugMap.set(aSlug, n.slug);
+          if (!titleToSlugMap.has(aNorm)) titleToSlugMap.set(aNorm, n.slug);
+        }
+      }
+    }
 
     // World index
     for (const w of n.worlds) {
@@ -510,7 +565,8 @@ export function saveNote(
   existingFilePath?: string,
   date?: string,
   image?: string,
-  guildCharacterId?: string
+  guildCharacterId?: string,
+  guildSessionId?: string
 ): { slug: string; filePath: string } {
   let targetFolder = 'World Notes';
   if (category === 'session-report' || tags.includes('session')) targetFolder = 'Session Reports';
@@ -521,7 +577,9 @@ export function saveNote(
   if (category === 'session-report' || tags.includes('session')) {
     const sDate = (date || existingFilePath?.match(/(\d{4}-\d{2}-\d{2})/)?.[1] || '').trim();
     const sWorld = (worlds.length > 0 ? worlds[0] : '').toUpperCase().trim();
-    if (sDate && sWorld) {
+    if (title.trim() && sDate && title.trim().startsWith(sDate)) {
+      canonicalTitle = title.trim();
+    } else if (sDate && sWorld) {
       canonicalTitle = `${sDate} ${sWorld}`;
     } else if (sDate) {
       canonicalTitle = sDate;
@@ -571,6 +629,10 @@ export function saveNote(
     frontmatterData.guildCharacterId = guildCharacterId;
   }
 
+  if (guildSessionId) {
+    frontmatterData.guildSessionId = guildSessionId;
+  }
+
   if (date) {
     frontmatterData.date = date;
   } else if (existingData.date && (category === 'session-report' || tags.includes('session'))) {
@@ -593,6 +655,65 @@ export function saveNote(
 // Return precomputed fast lookup map for all note titles -> slugs
 export function getTitleToSlugMap(): Map<string, string> {
   return getVaultIndex().titleToSlugMap;
+}
+
+export function transformWikilink(raw: string, titleMap: Map<string, string>): string {
+  const parts = raw.split('|');
+  const fullTarget = parts[0].trim();
+  const alias = parts.length > 1 ? parts.slice(1).join('|').trim() : (fullTarget.startsWith('#') ? fullTarget.slice(1) : fullTarget);
+
+  // Check for anchor (#)
+  let page = fullTarget;
+  let anchor = '';
+  if (fullTarget.includes('#')) {
+    const hashIdx = fullTarget.indexOf('#');
+    page = fullTarget.substring(0, hashIdx).trim();
+    const heading = fullTarget.substring(hashIdx + 1).trim();
+    if (heading) {
+      anchor = '#' + slugify(heading);
+    }
+  }
+
+  // If in-page anchor only: [[#Heading]] or [[#Heading|Alias]]
+  if (!page) {
+    return `<a href="${anchor || '#'}" class="wiki-link text-obsidian-purpleLight hover:underline font-medium">${alias}</a>`;
+  }
+
+  // Strip .md extension if present
+  page = page.replace(/\.md$/i, '').trim();
+
+  // Special system targets
+  const pageLower = page.toLowerCase();
+  if (pageLower === 'pc' || pageLower === 'pcs' || pageLower === 'player characters') {
+    return `<a href="/characters${anchor}" class="wiki-link text-obsidian-purpleLight hover:underline font-medium">${alias}</a>`;
+  }
+  if (pageLower === 'session' || pageLower === 'sessions' || pageLower === 'session reports') {
+    return `<a href="/sessions${anchor}" class="wiki-link text-obsidian-purpleLight hover:underline font-medium">${alias}</a>`;
+  }
+  if (pageLower === 'rule' || pageLower === 'rules') {
+    return `<a href="/rules${anchor}" class="wiki-link text-obsidian-purpleLight hover:underline font-medium">${alias}</a>`;
+  }
+
+  // Check if it's a known world
+  const matchedWorld = KNOWN_WORLDS.find(w => w.toLowerCase() === pageLower);
+  if (matchedWorld) {
+    return `<a href="/worlds/${matchedWorld.toLowerCase().replace(/\s+/g, '-')}${anchor}" class="wiki-link text-obsidian-purpleLight hover:underline font-medium">${alias}</a>`;
+  }
+
+  // Check in titleMap
+  const normTarget = slugify(page).replace(/^_+/, '').replace(/_/g, '-');
+  const slug =
+    titleMap.get(pageLower) ||
+    titleMap.get(slugify(page)) ||
+    titleMap.get(normTarget) ||
+    titleMap.get(pageLower.replace(/["']/g, ''));
+
+  if (slug) {
+    return `<a href="/notes/${slug}${anchor}" class="wiki-link text-obsidian-purpleLight hover:underline font-medium">${alias}</a>`;
+  }
+
+  // Unresolved link
+  return `<span class="text-zinc-400 border-b border-dotted border-zinc-600 cursor-help" title="Unlinked: ${fullTarget}">${alias}</span>`;
 }
 
 // Obsidian Callout Themes (Strictly zero emojis)
@@ -688,24 +809,7 @@ export function renderMarkdown(content: string, titleMap?: Map<string, string>):
 
   // 2. Transform Wikilinks: [[Target]] or [[Target|Alias]]
   text = text.replace(/\[\[(.*?)\]\]/g, (match, raw) => {
-    const parts = raw.split('|');
-    const target = parts[0].trim();
-    const alias = parts[1] ? parts[1].trim() : target;
-
-    // Check if it's a known world
-    const matchedWorld = KNOWN_WORLDS.find(w => w.toLowerCase() === target.toLowerCase());
-    if (matchedWorld) {
-      return `<a href="/worlds/${matchedWorld.toLowerCase().replace(/\\s+/g, '-')}" class="wiki-link text-obsidian-purpleLight hover:underline font-medium">${alias}</a>`;
-    }
-
-    // Check in titleMap
-    const slug = titleMap!.get(target.toLowerCase());
-    if (slug) {
-      return `<a href="/notes/${slug}" class="wiki-link text-obsidian-purpleLight hover:underline font-medium">${alias}</a>`;
-    }
-
-    // Unresolved link
-    return `<span class="text-zinc-400 border-b border-dotted border-zinc-600 cursor-help" title="Unlinked: ${target}">${alias}</span>`;
+    return transformWikilink(raw, titleMap!);
   });
 
   // Configure marked for GitHub Flavored Markdown
@@ -796,26 +900,12 @@ export function formatInlineMarkdown(content: string, titleMap?: Map<string, str
 
   let text = content;
 
+  // Protect / strip Obsidian Image Embeds in inline contexts: ![[image.png]]
+  text = text.replace(/!\[\[(.*?)\]\]/g, '');
+
   // 1. Transform Wikilinks: [[Target]] or [[Target|Alias]]
   text = text.replace(/\[\[(.*?)\]\]/g, (match, raw) => {
-    const parts = raw.split('|');
-    const target = parts[0].trim();
-    const alias = parts[1] ? parts[1].trim() : target;
-
-    // Check if it's a known world
-    const matchedWorld = KNOWN_WORLDS.find(w => w.toLowerCase() === target.toLowerCase());
-    if (matchedWorld) {
-      return `<a href="/worlds/${matchedWorld.toLowerCase().replace(/\s+/g, '-')}" class="wiki-link text-obsidian-purpleLight hover:underline font-medium">${alias}</a>`;
-    }
-
-    // Check in titleMap
-    const slug = titleMap!.get(target.toLowerCase());
-    if (slug) {
-      return `<a href="/notes/${slug}" class="wiki-link text-obsidian-purpleLight hover:underline font-medium">${alias}</a>`;
-    }
-
-    // Unresolved link
-    return `<span class="text-zinc-400 border-b border-dotted border-zinc-600 cursor-help" title="Unlinked: ${target}">${alias}</span>`;
+    return transformWikilink(raw, titleMap!);
   });
 
   // Strip block callouts if any leaked in

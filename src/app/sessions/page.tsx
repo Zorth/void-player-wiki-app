@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { getSessionReports, KNOWN_WORLDS, formatInlineMarkdown } from '@/lib/vault';
 import { formatAuthors } from '@/lib/constants';
-import { getGuildSessions, getGuildCharacters, getGuildQuests } from '@/lib/guild';
+import { getGuildSessions, getGuildCharacters, getGuildQuests, getGuildWorlds, findGuildSessionForNote } from '@/lib/guild';
 import { Calendar, Compass, Users, Coins, MessageSquare, PlusCircle, FilePenLine, CheckCircle2, Scroll } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -13,30 +13,15 @@ export default async function SessionsPage({
 }) {
   const worldFilter = searchParams.world || 'All';
   const sessions = getSessionReports(worldFilter);
-
-  const [guildSessions, guildChars, guildQuests] = await Promise.all([
+  const [guildWorlds, guildSessions, guildChars, guildQuests] = await Promise.all([
+    getGuildWorlds(),
     getGuildSessions(),
     getGuildCharacters(),
     getGuildQuests(),
   ]);
 
   const charMap = new Map(guildChars.map(c => [c._id, c.name]));
-
-  // Match guild sessions & quests to local sessions by date string
-  const guildSessionByDate = new Map<string, any>();
-  const questBySessionDate = new Map<string, string>();
-  for (const gs of guildSessions) {
-    if (gs.date) {
-      const dStr = new Date(gs.date).toISOString().split('T')[0];
-      guildSessionByDate.set(dStr, gs);
-      if (gs.questId) {
-        const q = guildQuests.find(quest => quest._id === gs.questId);
-        if (q) {
-          questBySessionDate.set(dStr, q.name);
-        }
-      }
-    }
-  }
+  const questMap = new Map(guildQuests.map(q => [q._id, q.name]));
 
   return (
     <div className="space-y-8">
@@ -90,7 +75,7 @@ export default async function SessionsPage({
           </div>
         ) : (
           sessions.map(s => {
-            const gs = s.date ? guildSessionByDate.get(s.date) : null;
+            const gs = findGuildSessionForNote(s, guildSessions, guildWorlds);
             const attendees: string[] = [];
             if (gs?.characters) {
               gs.characters.forEach((cid: string) => {
@@ -99,6 +84,7 @@ export default async function SessionsPage({
               });
             }
 
+            const questName = gs?.questId ? questMap.get(gs.questId) : null;
             const hasReport = s.hasReport ?? false;
 
             return (
@@ -151,10 +137,10 @@ export default async function SessionsPage({
                     </Link>
 
                     {/* Quest Subtitle */}
-                    {s.date && questBySessionDate.has(s.date) && (
+                    {questName && (
                       <div className="flex items-center space-x-1.5 text-xs text-emerald-300 font-medium">
                         <Scroll className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                        <span>{questBySessionDate.get(s.date)}</span>
+                        <span>{questName}</span>
                       </div>
                     )}
 

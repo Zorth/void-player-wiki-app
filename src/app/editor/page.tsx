@@ -1295,7 +1295,9 @@ function EditorContent() {
     let finalTitle = title.trim();
     if (articleType === 'session') {
       const sWorld = (selectedWorlds.length > 0 ? selectedWorlds[0] : '').toUpperCase().trim();
-      if (sessionDate.trim() && sWorld) {
+      if (title.trim() && sessionDate.trim() && title.trim().startsWith(sessionDate.trim())) {
+        finalTitle = title.trim();
+      } else if (sessionDate.trim() && sWorld) {
         finalTitle = `${sessionDate.trim()} ${sWorld}`;
       } else if (sessionDate.trim()) {
         finalTitle = sessionDate.trim();
@@ -1312,6 +1314,7 @@ function EditorContent() {
           date: articleType === 'session' ? (sessionDate || undefined) : undefined,
           image: image.trim() || undefined,
           guildCharacterId: guildCharacterId || undefined,
+          guildSessionId: existingMetadata?.guildSessionId || undefined,
           content: finalContent,
           worlds: articleType === 'meta' ? [] : selectedWorlds,
           tags: Array.from(new Set(finalTags)),
