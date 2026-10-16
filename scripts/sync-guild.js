@@ -4,6 +4,7 @@ const matter = require('gray-matter');
 
 const GUILD_BASE = 'https://guild.tarragon.be/api/external/v1';
 const VAULT_PATH = '/mnt/whale/07_NOTES_WORKING/void_player_wiki';
+const KNOWN_WORLDS = ['Sythian', 'Kalogeron', 'Khorash', 'Aldor', 'Elysium'];
 
 async function sync() {
   const [worlds, characters, sessions] = await Promise.all([
@@ -68,7 +69,13 @@ async function sync() {
 
     // Match candidate existing note:
     let match = existingSessionNotes.find(
-      n => !assignedNoteFiles.has(n.fileName) && n.guildSessionId && n.guildSessionId === s._id
+      n => !assignedNoteFiles.has(n.fileName) &&
+           n.guildSessionId &&
+           n.guildSessionId === s._id &&
+           !KNOWN_WORLDS.some(otherW =>
+             otherW.toLowerCase() !== w.toLowerCase() &&
+             n.fileName.toLowerCase().includes(otherW.toLowerCase())
+           )
     );
 
     if (!match) {

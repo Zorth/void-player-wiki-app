@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
 import { invalidateVaultCache } from './vault';
+import { KNOWN_WORLDS } from './constants';
 
 const GUILD_BASE = 'https://guild.tarragon.be/api/external/v1';
 
@@ -126,9 +127,15 @@ export async function runGuildSync(): Promise<SyncResult> {
       const charNames = (s.characters || []).map((cid: string) => charMap.get(cid)?.name).filter(Boolean);
 
       // Match candidate existing note:
-      // Priority 1: Exact match by guildSessionId
+      // Priority 1: Exact match by guildSessionId, ensuring it does not cross-match a file named after another world
       let match = existingSessionNotes.find(
-        n => !assignedNoteFiles.has(n.fileName) && n.guildSessionId && n.guildSessionId === s._id
+        n => !assignedNoteFiles.has(n.fileName) &&
+             n.guildSessionId &&
+             n.guildSessionId === s._id &&
+             !KNOWN_WORLDS.some(otherW =>
+               otherW.toLowerCase() !== w.toLowerCase() &&
+               n.fileName.toLowerCase().includes(otherW.toLowerCase())
+             )
       );
 
       // Priority 2: Match by Date AND World (if note is not yet assigned to a different guildSessionId)

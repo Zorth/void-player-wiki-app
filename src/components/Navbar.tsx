@@ -58,11 +58,16 @@ export default function Navbar() {
               <img
                 src="/void_icon_purple.png"
                 alt="The Void"
-                className="w-8 h-8 rounded-lg object-contain shadow-lg shadow-purple-900/30 group-hover:scale-105 transition-transform"
+                className="w-8 h-8 rounded-lg object-contain shadow-lg shadow-purple-900/30 group-hover:scale-105 transition-transform shrink-0"
               />
-              <span className="font-bold text-lg text-obsidian-text tracking-tight group-hover:text-obsidian-purpleLight transition-colors">
-                The Void <span className="text-obsidian-textMuted font-normal text-sm">Player Wiki</span>
-              </span>
+              <div className="flex flex-col leading-tight">
+                <span className="font-bold text-sm tracking-tight text-obsidian-text group-hover:text-obsidian-purpleLight transition-colors whitespace-nowrap">
+                  The Void
+                </span>
+                <span className="text-[11px] font-medium text-obsidian-textMuted tracking-normal whitespace-nowrap">
+                  Player Wiki
+                </span>
+              </div>
             </Link>
 
             {/* Nav Links */}
