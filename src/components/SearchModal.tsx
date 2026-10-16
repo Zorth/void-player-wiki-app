@@ -14,6 +14,10 @@ interface SearchResult {
   abstract?: string;
   url?: string;
   isWorld?: boolean;
+  matchType?: 'title' | 'tag' | 'world' | 'content';
+  matchedHeading?: string;
+  snippet?: string;
+  score?: number;
 }
 
 export default function SearchModal({ onClose }: { onClose: () => void }) {
@@ -36,7 +40,7 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
           setSelectedIndex(0);
         })
         .catch(() => {});
-    }, 150);
+    }, 120);
 
     return () => clearTimeout(timer);
   }, [query]);
@@ -71,7 +75,7 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Search notes... (e.g. #settlement @sythian or title)"
+            placeholder="Search notes & content... (e.g. #tag @world or words)"
             className="w-full bg-transparent text-white placeholder-obsidian-textFaint text-base focus:outline-none"
           />
           <button onClick={onClose} className="p-1 text-obsidian-textMuted hover:text-white transition-colors">
@@ -83,7 +87,7 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
         <div className="overflow-y-auto p-2 divide-y divide-obsidian-borderSubtle">
           {results.length === 0 ? (
             <div className="py-12 text-center text-sm text-obsidian-textFaint">
-              No matching notes found. Try searching for a world, location, or character.
+              No matching notes found. Try searching for a world, location, character, or lore detail.
             </div>
           ) : (
             results.map((r, i) => {
@@ -93,7 +97,7 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
 
               return (
                 <Link
-                  key={`${r.slug}-${href}`}
+                  key={`${r.slug}-${href}-${i}`}
                   href={href}
                   onClick={onClose}
                   className={`flex items-start justify-between p-3 rounded-lg transition-all ${
@@ -102,18 +106,30 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
                       : 'hover:bg-obsidian-card border border-transparent'
                   }`}
                 >
-                  <div className="flex-1 pr-3">
-                    <div className="flex items-center space-x-2">
+                  <div className="flex-1 pr-3 min-w-0">
+                    <div className="flex flex-wrap items-center gap-1.5 mb-1">
                       {isWorld ? (
                         <Compass className={`w-4 h-4 shrink-0 ${isSelected ? 'text-obsidian-purpleLight' : 'text-purple-400'}`} />
                       ) : (
                         <FileText className={`w-4 h-4 shrink-0 ${isSelected ? 'text-obsidian-purpleLight' : 'text-obsidian-textMuted'}`} />
                       )}
-                      <span className="font-medium text-sm text-white">{r.title}</span>
+                      <span className="font-medium text-sm text-white truncate">{r.title}</span>
 
                       {isWorld && (
                         <span className="inline-flex items-center text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-purple-900/60 text-purple-200 border border-purple-700/50">
                           World
+                        </span>
+                      )}
+
+                      {r.matchType === 'content' && (
+                        <span className="inline-flex items-center text-[10px] font-medium px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-300 border border-zinc-700/60">
+                          In Content
+                        </span>
+                      )}
+
+                      {r.matchedHeading && (
+                        <span className="inline-flex items-center text-[10px] font-medium px-1.5 py-0.2 rounded bg-indigo-950/40 text-indigo-300 border border-indigo-800/40">
+                          § {r.matchedHeading}
                         </span>
                       )}
 
@@ -127,11 +143,16 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
                         ))}
                     </div>
 
-                    {r.abstract && (
+                    {r.snippet ? (
+                      <p
+                        className="text-xs text-obsidian-textMuted mt-1 line-clamp-2 leading-relaxed [&>mark]:bg-purple-900/60 [&>mark]:text-purple-200 [&>mark]:px-0.5 [&>mark]:rounded [&>mark]:font-medium"
+                        dangerouslySetInnerHTML={{ __html: r.snippet }}
+                      />
+                    ) : r.abstract ? (
                       <p className="text-xs text-obsidian-textMuted mt-1 line-clamp-1">
                         {r.abstract}
                       </p>
-                    )}
+                    ) : null}
 
                     {r.tags.length > 0 && (
                       <div className="flex items-center space-x-1.5 mt-1.5">

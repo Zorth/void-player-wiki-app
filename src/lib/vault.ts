@@ -517,6 +517,10 @@ export function getAllNotes(): NoteMetadata[] {
   return getVaultIndex().notes;
 }
 
+export function getVaultTimestamp(): number {
+  return getVaultIndex().timestamp;
+}
+
 export function getNoteBySlug(slug: string): NoteMetadata | null {
   const index = getVaultIndex();
   const clean = decodeURIComponent(slug).toLowerCase().trim();
