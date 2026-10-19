@@ -685,7 +685,9 @@ export function transformWikilink(raw: string, titleMap: Map<string, string>): s
     page = fullTarget.substring(0, hashIdx).trim();
     const heading = fullTarget.substring(hashIdx + 1).trim();
     if (heading) {
-      anchor = '#' + slugify(heading);
+      // Support block/table anchors like [[#^SpeedTable]] or [[Note#^SpeedTable]]
+      const cleanHeading = heading.replace(/^\^/, '');
+      anchor = '#' + slugify(cleanHeading);
     }
   }
 
@@ -833,6 +835,44 @@ export function renderMarkdown(content: string, titleMap?: Map<string, string>):
     breaks: true,
   });
 
+  // Extract Markdown Footnote definitions: [^id]: definition...
+  const footnoteDefs = new Map<string, string>();
+  const fnDefRegex = /^\[\^([a-zA-Z0-9_-]+)\]:[ \t]*([^\n]*(?:\n(?![ \t]*\[\^[a-zA-Z0-9_-]+\]:|\n)[^\n]*)*)/gm;
+  text = text.replace(fnDefRegex, (match, id, content) => {
+    footnoteDefs.set(id.toLowerCase(), content.trim());
+    return '';
+  });
+
+  // Replace Markdown Footnote references: [^id]
+  const usedFootnotes: string[] = [];
+  text = text.replace(/\[\^([a-zA-Z0-9_-]+)\](?!:)/g, (match, id) => {
+    const idLower = id.toLowerCase();
+    let index = usedFootnotes.indexOf(idLower);
+    if (index === -1) {
+      usedFootnotes.push(idLower);
+      index = usedFootnotes.length - 1;
+    }
+    const num = index + 1;
+    const rawDef = footnoteDefs.get(idLower) || '';
+    // Format tooltip content: strip markdown links or format cleanly for popup preview
+    const cleanDefHtml = rawDef ? (marked.parseInline(rawDef) as string) : `Footnote ${num}`;
+    return `<span class="footnote-wrapper relative inline-block group" tabindex="0">` +
+      `<sup><a href="#fn-${idLower}" id="fnref-${idLower}" class="footnote-ref text-obsidian-purpleLight hover:underline font-mono text-xs px-0.5 select-none" aria-label="Footnote ${num}">[${num}]</a></sup>` +
+      `<span class="footnote-popover pointer-events-none group-hover:pointer-events-auto group-focus-within:pointer-events-auto group-hover:opacity-100 group-hover:visible group-focus-within:opacity-100 group-focus-within:visible opacity-0 invisible transition-all duration-150 absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-40 w-64 max-w-[85vw] p-2.5 rounded-lg bg-obsidian-card border border-obsidian-border text-zinc-200 text-xs shadow-xl leading-relaxed font-normal normal-case break-words select-text">` +
+        `<span class="block text-[10px] font-mono text-obsidian-purpleLight font-semibold uppercase mb-1">Footnote [${num}]</span>` +
+        `<span>${cleanDefHtml}</span>` +
+        `<span class="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-obsidian-card"></span>` +
+      `</span>` +
+    `</span>`;
+  });
+
+  // Transform Obsidian Block / Table ID: ^TableName
+  // Rendered cleanly as a very small, subtle subtext block identifier with anchor id for in-page links
+  text = text.replace(/^[ \t]*\^([a-zA-Z0-9_-]+)[ \t]*$/gm, (match, id) => {
+    const slugId = slugify(id);
+    return `<div id="${slugId}" class="table-block-id text-[11px] font-mono text-obsidian-textFaint text-right -mt-3 mb-4 select-none opacity-60 tracking-wider">^${id}</div>`;
+  });
+
   // 3. Transform Obsidian Callouts:
   // > [!type|metadata][+-] Title
   // > Body...
@@ -877,6 +917,27 @@ export function renderMarkdown(content: string, titleMap?: Map<string, string>):
 
   // Restore LaTeX math spans
   parsedHtml = parsedHtml.replace(/%%MATH_SPAN_(\d+)%%/g, (_, idx) => mathSpans[Number(idx)]);
+
+  // Render collected Footnotes at the bottom if any were used
+  if (usedFootnotes.length > 0) {
+    let fnHtml = '<section class="footnotes mt-12 pt-6 border-t border-obsidian-border text-xs text-obsidian-textMuted space-y-2.5">';
+    fnHtml += '<div class="text-[11px] font-semibold text-obsidian-textFaint uppercase tracking-wider mb-2 select-none">Footnotes</div>';
+    fnHtml += '<ol class="list-decimal list-inside space-y-1.5 pl-1">';
+
+    for (let i = 0; i < usedFootnotes.length; i++) {
+      const id = usedFootnotes[i];
+      const rawDef = footnoteDefs.get(id) || '';
+      // Parse inline markdown inside footnote definition (e.g. bold, links, etc.)
+      const parsedDef = rawDef ? (marked.parseInline(rawDef) as string) : '';
+      fnHtml += `<li id="fn-${id}" class="leading-relaxed">`;
+      fnHtml += `<span class="align-baseline">${parsedDef}</span> `;
+      fnHtml += `<a href="#fnref-${id}" class="footnote-backref text-obsidian-purpleLight hover:underline font-mono ml-1 select-none" title="Back to reference">↩</a>`;
+      fnHtml += `</li>`;
+    }
+
+    fnHtml += '</ol></section>';
+    parsedHtml += fnHtml;
+  }
 
   return parsedHtml;
 }
