@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { getSessionReports, KNOWN_WORLDS, formatInlineMarkdown } from '@/lib/vault';
 import { formatAuthors } from '@/lib/constants';
 import { getGuildSessions, getGuildCharacters, getGuildQuests, getGuildWorlds, findGuildSessionForNote } from '@/lib/guild';
-import { Calendar, Compass, Users, Coins, MessageSquare, FilePenLine, CheckCircle2, Scroll } from 'lucide-react';
+import { Calendar, Compass, Users, Coins, MessageSquare, FilePenLine, CheckCircle2, Scroll, Skull } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -152,11 +152,27 @@ export default async function SessionsPage({
                     {attendees.length > 0 && (
                       <div className="flex flex-wrap items-center gap-1.5 pt-2">
                         <Users className="w-3.5 h-3.5 text-obsidian-textFaint mr-1 shrink-0" />
-                        {attendees.map(a => (
-                          <span key={a} className="text-xs px-2 py-0.5 rounded bg-obsidian-card text-obsidian-textMuted border border-obsidian-borderSubtle">
-                            {a}
-                          </span>
-                        ))}
+                        {attendees.map(a => {
+                          const charObj = guildChars.find(c => c.name.toLowerCase().trim() === a.toLowerCase().trim());
+                          const diedHere = Boolean(charObj && gs?._id && charObj.diedAtSessionId === gs._id);
+                          const isDead = Boolean(charObj?.isDead);
+                          return (
+                            <span
+                              key={a}
+                              className={`text-xs px-2 py-0.5 rounded border inline-flex items-center gap-1 ${
+                                diedHere
+                                  ? 'bg-rose-950/40 text-rose-300 border-rose-800/50 font-medium'
+                                  : isDead
+                                  ? 'bg-obsidian-card text-obsidian-textFaint border-obsidian-borderSubtle'
+                                  : 'bg-obsidian-card text-obsidian-textMuted border-obsidian-borderSubtle'
+                              }`}
+                            >
+                              {diedHere && <Skull className="w-3 h-3 text-rose-400 shrink-0" />}
+                              <span>{a}</span>
+                              {diedHere && <span className="text-[10px] text-rose-400 font-semibold">(Fell)</span>}
+                            </span>
+                          );
+                        })}
                       </div>
                     )}
                   </div>

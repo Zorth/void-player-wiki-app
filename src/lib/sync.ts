@@ -263,11 +263,17 @@ export async function runGuildSync(): Promise<SyncResult> {
         data.level = c.lvl || 1;
         data.rank = rank;
         data.xp = c.xp || 0;
+        data.isDead = Boolean(c.isDead);
+        if (c.diedAtSessionId) data.diedAtSessionId = c.diedAtSessionId;
+        else delete data.diedAtSessionId;
+        if (c.diedAtLevel) data.diedAtLevel = c.diedAtLevel;
+        else delete data.diedAtLevel;
         data.tags = Array.from(new Set([
           ...(Array.isArray(data.tags) ? data.tags : []),
           'pc',
-          `pc/${rank}`
-        ]));
+          `pc/${rank}`,
+          ...(c.isDead ? ['deceased'] : [])
+        ].filter(t => !c.isDead ? t !== 'deceased' && t !== 'fallen' : true)));
         fs.writeFileSync(fullPath, matter.stringify(parsed.content, data), 'utf8');
         try {
           fs.chownSync(fullPath, 1000, 1000);
@@ -284,8 +290,11 @@ export async function runGuildSync(): Promise<SyncResult> {
           level: c.lvl || 1,
           rank: rank,
           xp: c.xp || 0,
-          tags: ['pc', `pc/${rank}`],
+          isDead: Boolean(c.isDead),
+          tags: ['pc', `pc/${rank}`, ...(c.isDead ? ['deceased'] : [])],
         };
+        if (c.diedAtSessionId) data.diedAtSessionId = c.diedAtSessionId;
+        if (c.diedAtLevel) data.diedAtLevel = c.diedAtLevel;
         if (c.player) data.player = c.player;
         if (c.class) data.class = c.class;
         if (c.ancestry) data.ancestry = c.ancestry;

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { getNoteBySlug, renderMarkdown, KNOWN_WORLDS, slugify, getCharacterAvatar } from '@/lib/vault';
+import { getNoteBySlug, getAllNotes, renderMarkdown, KNOWN_WORLDS, slugify, getCharacterAvatar } from '@/lib/vault';
 import { formatPlayerName, formatAuthors, formatAuthorName } from '@/lib/constants';
 import { getGuildCharacters, getGuildSessions, getGuildWorlds, getGuildQuests, findGuildSessionForNote } from '@/lib/guild';
 import { getSession } from '@/lib/auth';
@@ -23,6 +23,7 @@ import {
   FilePenLine,
   Scroll,
   CheckCircle2,
+  Skull,
 } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -107,7 +108,17 @@ export default async function NotePage({ params }: { params: { slug: string } })
     : null;
 
   // For session reports: extract attendees, abstract, and notes
-  let sessionPcs: Array<{ name: string; slug?: string; lvl?: number; ancestry?: string; class?: string; player?: string; avatarUrl?: string | null }> = [];
+  let sessionPcs: Array<{
+    name: string;
+    slug?: string;
+    lvl?: number;
+    ancestry?: string;
+    class?: string;
+    player?: string;
+    avatarUrl?: string | null;
+    isDead?: boolean;
+    diedHere?: boolean;
+  }> = [];
   let abstractHtml = '';
   let notesHtml = '';
   let hasAbstract = false;
@@ -126,6 +137,11 @@ export default async function NotePage({ params }: { params: { slug: string } })
           const cSlug = slugify(gc.name);
           const cNote = getNoteBySlug(cSlug);
           const avatar = getCharacterAvatar(gc.name, cNote || undefined);
+          const diedHere = Boolean(
+            (matchedSession && gc.diedAtSessionId === matchedSession._id) ||
+            (note.guildSessionId && gc.diedAtSessionId === note.guildSessionId)
+          );
+          const isDead = Boolean(gc.isDead || cNote?.isDead || diedHere);
           pcs.push({
             name: gc.name,
             slug: cNote ? cNote.slug : undefined,
@@ -134,6 +150,8 @@ export default async function NotePage({ params }: { params: { slug: string } })
             class: gc.class,
             player: gc.player,
             avatarUrl: avatar,
+            isDead,
+            diedHere,
           });
         }
       }
@@ -157,6 +175,13 @@ export default async function NotePage({ params }: { params: { slug: string } })
           const cSlug = slugify(target);
           const cNote = getNoteBySlug(cSlug);
           const avatar = getCharacterAvatar(target, cNote || undefined);
+          const diedHere = Boolean(
+            gc && (
+              (matchedSession && gc.diedAtSessionId === matchedSession._id) ||
+              (note.guildSessionId && gc.diedAtSessionId === note.guildSessionId)
+            )
+          );
+          const isDead = Boolean(gc?.isDead || cNote?.isDead || diedHere);
           pcs.push({
             name: alias || target,
             slug: cNote ? cNote.slug : undefined,
@@ -165,6 +190,8 @@ export default async function NotePage({ params }: { params: { slug: string } })
             class: gc?.class,
             player: gc?.player,
             avatarUrl: avatar,
+            isDead,
+            diedHere,
           });
         }
       }
@@ -218,6 +245,14 @@ export default async function NotePage({ params }: { params: { slug: string } })
     ? matchedChar?.rank || (note.tags.find(t => t.startsWith('pc/'))?.replace('pc/', '')) || (note as any).rank
     : null;
   const charRank = isPC ? (rawRank && rawRank.toLowerCase() !== 'none' ? rawRank : 'Apprentice') : null;
+
+  // Dead character status & linked death session
+  const allNotes = getAllNotes();
+  const isDeadChar = Boolean(matchedChar?.isDead || note.isDead);
+  const deathSessionId = matchedChar?.diedAtSessionId || note.diedAtSessionId;
+  const deathSessionNote = deathSessionId
+    ? allNotes.find(n => n.guildSessionId === deathSessionId || (n.rawContent && n.rawContent.includes(deathSessionId)))
+    : null;
 
   // Check if world note
   const isWorld = note.tags.includes('world') || KNOWN_WORLDS.some(w => w.toLowerCase() === note.title.toLowerCase());
@@ -301,6 +336,12 @@ export default async function NotePage({ params }: { params: { slug: string } })
                 <span className="capitalize">{charRank} Rank</span>
               </div>
             )}
+            {isPC && isDeadChar && (
+              <div className="inline-flex items-center space-x-1.5 text-xs text-rose-400 bg-rose-950/40 border border-rose-800/50 px-2.5 py-0.5 rounded-full font-semibold uppercase tracking-wider">
+                <Skull className="w-3.5 h-3.5 text-rose-400" />
+                <span>Fallen Hero (Deceased)</span>
+              </div>
+            )}
           </div>
 
           {session?.canEdit && (
@@ -351,25 +392,54 @@ export default async function NotePage({ params }: { params: { slug: string } })
               <img
                 src={characterAvatar}
                 alt={matchedChar?.name || note.title}
-                className="max-h-56 max-w-[200px] sm:max-w-[240px] w-auto h-auto object-contain border border-obsidian-border shadow-md bg-obsidian-card"
+                className={`max-h-56 max-w-[200px] sm:max-w-[240px] w-auto h-auto object-contain border shadow-md bg-obsidian-card ${
+                  isDeadChar ? 'border-rose-900/50 grayscale contrast-125 opacity-85' : 'border-obsidian-border'
+                }`}
               />
             </div>
           )}
 
           {/* Guild API Character Dossier Card (Callout) - only for Player Characters */}
           {isPC && (matchedChar || !characterAvatar) && (
-            <section className="flex-1 w-full min-w-0 p-5 bg-gradient-to-r from-blue-950/20 via-obsidian-surface to-obsidian-surface border border-blue-800/40 rounded-2xl space-y-3 shadow-sm">
+            <section className={`flex-1 w-full min-w-0 p-5 rounded-2xl space-y-3 shadow-sm ${
+              isDeadChar
+                ? 'bg-gradient-to-r from-rose-950/25 via-obsidian-surface to-obsidian-surface border border-rose-900/40'
+                : 'bg-gradient-to-r from-blue-950/20 via-obsidian-surface to-obsidian-surface border border-blue-800/40'
+            }`}>
               <div className="flex items-center justify-between border-b border-obsidian-borderSubtle pb-2.5">
-                <div className="inline-flex items-center space-x-2 text-xs font-bold uppercase tracking-wider text-blue-300">
-                  <Shield className="w-3.5 h-3.5" />
-                  <span>Official Guild Character Record</span>
+                <div className={`inline-flex items-center space-x-2 text-xs font-bold uppercase tracking-wider ${
+                  isDeadChar ? 'text-rose-300' : 'text-blue-300'
+                }`}>
+                  {isDeadChar ? <Skull className="w-3.5 h-3.5 text-rose-400" /> : <Shield className="w-3.5 h-3.5" />}
+                  <span>{isDeadChar ? 'Official Guild Character Record (Memorial)' : 'Official Guild Character Record'}</span>
                 </div>
                 {matchedChar && (
-                  <span className="text-[11px] px-2 py-0.5 rounded bg-blue-900/40 text-blue-200 border border-blue-700/50 font-mono font-semibold">
-                    Lvl {matchedChar.lvl}
+                  <span className={`text-[11px] px-2 py-0.5 rounded font-mono font-semibold flex items-center gap-1 ${
+                    isDeadChar
+                      ? 'bg-rose-950/50 text-rose-300 border border-rose-800/60'
+                      : 'bg-blue-900/40 text-blue-200 border border-blue-700/50'
+                  }`}>
+                    {isDeadChar && <Skull className="w-3 h-3 text-rose-400" />}
+                    {isDeadChar ? `Deceased (Lvl ${matchedChar.diedAtLevel || matchedChar.lvl})` : `Lvl ${matchedChar.lvl}`}
                   </span>
                 )}
               </div>
+
+              {isDeadChar && (
+                <div className="p-3 bg-rose-950/30 border border-rose-900/50 rounded-xl text-xs text-rose-300 flex items-start gap-2.5">
+                  <Skull className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="text-rose-200 uppercase tracking-wider block font-bold text-[11px]">Fallen Hero of the Void</strong>
+                    <span className="text-rose-300/90 leading-relaxed">
+                      This adventurer met their end in battle
+                      {(matchedChar?.diedAtLevel || note.diedAtLevel) ? ` at Level ${matchedChar?.diedAtLevel || note.diedAtLevel}` : ''}.
+                      {deathSessionNote ? (
+                        <> Fell during the expedition in <Link href={`/notes/${deathSessionNote.slug}`} className="underline font-semibold text-rose-200 hover:text-white ml-0.5">{deathSessionNote.title}</Link>.</>
+                      ) : null}
+                    </span>
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                 <div>
@@ -389,9 +459,16 @@ export default async function NotePage({ params }: { params: { slug: string } })
                   <span className="font-semibold text-obsidian-purpleLight capitalize">{charRank}</span>
                 </div>
                 <div>
-                  <span className="text-obsidian-textFaint block">System &amp; XP</span>
+                  <span className="text-obsidian-textFaint block">System &amp; Status</span>
                   <span className="font-semibold text-white">
-                    {matchedChar ? `${matchedChar.system === 'PF' ? 'Pathfinder 2e' : 'D&D 2024'} (${matchedChar.xp || 0} XP)` : 'D&D 2024'}
+                    {matchedChar ? `${matchedChar.system === 'PF' ? 'Pathfinder 2e' : 'D&D 2024'}` : 'D&D 2024'}
+                    {isDeadChar ? (
+                      <span className="ml-1.5 text-rose-400 font-bold inline-flex items-center gap-0.5">
+                        &bull; Deceased
+                      </span>
+                    ) : (
+                      ` (${matchedChar?.xp || 0} XP)`
+                    )}
                   </span>
                 </div>
               </div>
@@ -545,16 +622,26 @@ export default async function NotePage({ params }: { params: { slug: string } })
                 {sessionPcs.map(pc => (
                   <div
                     key={pc.name}
-                    className="p-3 bg-obsidian-surface border border-obsidian-border rounded-xl flex items-center space-x-3 hover:border-obsidian-purpleBorder transition-all"
+                    className={`p-3 bg-obsidian-surface border rounded-xl flex items-center space-x-3 transition-all ${
+                      pc.diedHere
+                        ? 'border-rose-900/50 hover:border-rose-700/70 bg-gradient-to-r from-rose-950/20 to-obsidian-surface'
+                        : 'border-obsidian-border hover:border-obsidian-purpleBorder'
+                    }`}
                   >
                     {pc.avatarUrl ? (
                       <img
                         src={pc.avatarUrl}
                         alt={pc.name}
-                        className="w-10 h-10 rounded-lg object-cover border border-obsidian-border shrink-0 bg-obsidian-card"
+                        className={`w-10 h-10 rounded-lg object-cover border shrink-0 bg-obsidian-card ${
+                          pc.isDead ? 'border-rose-900/40 grayscale contrast-125 opacity-80' : 'border-obsidian-border'
+                        }`}
                       />
                     ) : (
-                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-obsidian-purpleFaint to-obsidian-card border border-obsidian-border flex items-center justify-center shrink-0 text-obsidian-purpleLight font-bold text-sm font-serif">
+                      <div className={`w-10 h-10 rounded-lg border flex items-center justify-center shrink-0 font-bold text-sm font-serif ${
+                        pc.isDead
+                          ? 'bg-gradient-to-br from-rose-950/40 to-obsidian-card border-rose-900/40 text-rose-300'
+                          : 'bg-gradient-to-br from-obsidian-purpleFaint to-obsidian-card border-obsidian-border text-obsidian-purpleLight'
+                      }`}>
                         {pc.name.charAt(0)}
                       </div>
                     )}
@@ -569,11 +656,24 @@ export default async function NotePage({ params }: { params: { slug: string } })
                             pc.name
                           )}
                         </span>
-                        {pc.lvl !== undefined && (
-                          <span className="shrink-0 text-[10px] px-1.5 py-0.2 rounded bg-purple-950/40 text-purple-300 border border-purple-800/40 font-mono font-semibold">
-                            Lvl {pc.lvl}
-                          </span>
-                        )}
+                        <div className="flex items-center gap-1 shrink-0">
+                          {pc.diedHere ? (
+                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-rose-950/60 text-rose-300 border border-rose-800/60 font-mono font-semibold flex items-center gap-0.5">
+                              <Skull className="w-2.5 h-2.5 text-rose-400" />
+                              Fell Here
+                            </span>
+                          ) : pc.isDead ? (
+                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-rose-950/40 text-rose-400 border border-rose-900/40 font-mono font-semibold flex items-center gap-0.5">
+                              <Skull className="w-2.5 h-2.5" />
+                              Deceased
+                            </span>
+                          ) : null}
+                          {pc.lvl !== undefined && (
+                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-purple-950/40 text-purple-300 border border-purple-800/40 font-mono font-semibold">
+                              Lvl {pc.lvl}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <p className="text-[11px] text-obsidian-textFaint truncate">
                         {pc.ancestry && pc.class ? `${pc.ancestry} ${pc.class}` : pc.player ? `Played by ${formatPlayerName(pc.player)}` : 'Adventurer'}

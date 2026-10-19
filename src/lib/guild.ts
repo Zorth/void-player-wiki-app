@@ -20,6 +20,9 @@ export interface GuildCharacter {
   title?: string | null;
   userId?: string;
   xp?: number;
+  isDead?: boolean;
+  diedAtSessionId?: string;
+  diedAtLevel?: number;
 }
 
 export interface GuildSession {

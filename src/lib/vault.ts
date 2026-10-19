@@ -24,6 +24,9 @@ export interface NoteMetadata {
   guildSessionId?: string;
   image?: string;
   hasReport?: boolean;
+  isDead?: boolean;
+  diedAtSessionId?: string;
+  diedAtLevel?: number;
 }
 
 export { KNOWN_WORLDS };
@@ -270,6 +273,11 @@ function buildVaultIndex(): VaultIndex {
 
       const guildCharacterId = parsed.data.guildCharacterId ? String(parsed.data.guildCharacterId).trim() : undefined;
       const guildSessionId = parsed.data.guildSessionId ? String(parsed.data.guildSessionId).trim() : undefined;
+      const isDead = parsed.data.isDead !== undefined
+        ? Boolean(parsed.data.isDead)
+        : (tags.includes('deceased') || tags.includes('fallen') ? true : undefined);
+      const diedAtSessionId = parsed.data.diedAtSessionId ? String(parsed.data.diedAtSessionId).trim() : undefined;
+      const diedAtLevel = typeof parsed.data.diedAtLevel === 'number' ? parsed.data.diedAtLevel : undefined;
 
       let image: string | undefined = undefined;
       if (parsed.data.image && typeof parsed.data.image === 'string' && parsed.data.image.toLowerCase() !== 'null') {
@@ -337,6 +345,9 @@ function buildVaultIndex(): VaultIndex {
         guildSessionId,
         image,
         hasReport,
+        isDead,
+        diedAtSessionId,
+        diedAtLevel,
       });
     }
 
