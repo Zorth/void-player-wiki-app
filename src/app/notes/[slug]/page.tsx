@@ -330,18 +330,20 @@ export default async function NotePage({ params }: { params: { slug: string } })
                 )}
               </div>
             )}
-            {isPC && charRank && (
-              <div className="inline-flex items-center space-x-1.5 text-xs text-obsidian-purpleLight font-semibold uppercase tracking-wider">
-                <Award className="w-3.5 h-3.5" />
-                <span className="capitalize">{charRank} Rank</span>
-              </div>
-            )}
-            {isPC && isDeadChar && (
-              <div className="inline-flex items-center space-x-1.5 text-xs text-rose-400 bg-rose-950/40 border border-rose-800/50 px-2.5 py-0.5 rounded-full font-semibold uppercase tracking-wider">
-                <Skull className="w-3.5 h-3.5 text-rose-400" />
-                <span>Fallen Hero (Deceased)</span>
-              </div>
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+              {isPC && charRank && (
+                <div className="inline-flex items-center space-x-1.5 text-xs text-obsidian-purpleLight font-semibold uppercase tracking-wider">
+                  <Award className="w-3.5 h-3.5" />
+                  <span className="capitalize">{charRank} Rank</span>
+                </div>
+              )}
+              {isPC && isDeadChar && (
+                <div className="inline-flex items-center space-x-1.5 text-xs text-rose-400 bg-rose-950/40 border border-rose-800/50 px-2.5 py-0.5 rounded-full font-semibold uppercase tracking-wider">
+                  <Skull className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Fallen Hero (Deceased)</span>
+                </div>
+              )}
+            </div>
           </div>
 
           {session?.canEdit && (
@@ -393,7 +395,7 @@ export default async function NotePage({ params }: { params: { slug: string } })
                 src={characterAvatar}
                 alt={matchedChar?.name || note.title}
                 className={`max-h-56 max-w-[200px] sm:max-w-[240px] w-auto h-auto object-contain border shadow-md bg-obsidian-card ${
-                  isDeadChar ? 'border-rose-900/50 grayscale contrast-125 opacity-85' : 'border-obsidian-border'
+                  isDeadChar ? 'border-rose-900/50' : 'border-obsidian-border'
                 }`}
               />
             </div>
@@ -633,7 +635,7 @@ export default async function NotePage({ params }: { params: { slug: string } })
                         src={pc.avatarUrl}
                         alt={pc.name}
                         className={`w-10 h-10 rounded-lg object-cover border shrink-0 bg-obsidian-card ${
-                          pc.isDead ? 'border-rose-900/40 grayscale contrast-125 opacity-80' : 'border-obsidian-border'
+                          pc.isDead ? 'border-rose-900/40' : 'border-obsidian-border'
                         }`}
                       />
                     ) : (

@@ -76,7 +76,7 @@ export default async function CharactersPage({
                 src={avatarUrl}
                 alt={c.name}
                 className={`w-14 h-14 rounded-xl object-cover border shrink-0 shadow-md bg-obsidian-card ${
-                  isDead ? 'border-rose-900/40 grayscale contrast-125 opacity-80' : 'border-obsidian-border'
+                  isDead ? 'border-rose-900/40' : 'border-obsidian-border'
                 }`}
               />
             ) : (
