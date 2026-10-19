@@ -858,9 +858,12 @@ export function renderMarkdown(content: string, titleMap?: Map<string, string>):
     const cleanDefHtml = rawDef ? (marked.parseInline(rawDef) as string) : `Footnote ${num}`;
     return `<span class="footnote-wrapper relative inline-block group" tabindex="0">` +
       `<sup><a href="#fn-${idLower}" id="fnref-${idLower}" class="footnote-ref text-obsidian-purpleLight hover:underline font-mono text-xs px-0.5 select-none" aria-label="Footnote ${num}">[${num}]</a></sup>` +
-      `<span class="footnote-popover pointer-events-none group-hover:pointer-events-auto group-focus-within:pointer-events-auto group-hover:opacity-100 group-hover:visible group-focus-within:opacity-100 group-focus-within:visible opacity-0 invisible transition-all duration-150 absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-40 w-64 max-w-[85vw] p-2.5 rounded-lg bg-obsidian-card border border-obsidian-border text-zinc-200 text-xs shadow-xl leading-relaxed font-normal normal-case break-words select-text">` +
-        `<span class="block text-[10px] font-mono text-obsidian-purpleLight font-semibold uppercase mb-1">Footnote [${num}]</span>` +
-        `<span>${cleanDefHtml}</span>` +
+      `<span class="footnote-popover pointer-events-none group-hover:pointer-events-auto group-focus-within:pointer-events-auto group-hover:opacity-100 group-hover:visible group-focus-within:opacity-100 group-focus-within:visible opacity-0 invisible transition-all duration-150 absolute bottom-full left-1/2 -translate-x-1/2 mb-2.5 z-40 w-80 sm:w-96 max-w-[90vw] px-3.5 py-2.5 rounded-xl bg-obsidian-card/95 backdrop-blur border border-obsidian-border text-zinc-200 text-xs shadow-2xl leading-normal font-normal normal-case break-words select-text">` +
+        `<span class="flex items-center gap-1.5 text-[10px] font-mono text-obsidian-purpleLight font-semibold uppercase mb-1">` +
+          `<span class="inline-block w-1.5 h-1.5 rounded-full bg-obsidian-purpleLight/60"></span>` +
+          `<span>Footnote [${num}]</span>` +
+        `</span>` +
+        `<span class="text-zinc-300 block">${cleanDefHtml}</span>` +
         `<span class="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-obsidian-card"></span>` +
       `</span>` +
     `</span>`;
