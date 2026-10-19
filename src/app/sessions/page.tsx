@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { getSessionReports, KNOWN_WORLDS, formatInlineMarkdown } from '@/lib/vault';
 import { formatAuthors } from '@/lib/constants';
 import { getGuildSessions, getGuildCharacters, getGuildQuests, getGuildWorlds, findGuildSessionForNote } from '@/lib/guild';
-import { Calendar, Compass, Users, Coins, MessageSquare, PlusCircle, FilePenLine, CheckCircle2, Scroll } from 'lucide-react';
+import { Calendar, Compass, Users, Coins, MessageSquare, FilePenLine, CheckCircle2, Scroll } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,14 +33,6 @@ export default async function SessionsPage({
             Chronological archive of all recorded adventure logs, quest outcomes, and character deeds.
           </p>
         </div>
-
-        <Link
-          href="/editor?category=session-report"
-          className="inline-flex items-center space-x-2 px-4 py-2 bg-obsidian-purple hover:bg-obsidian-purpleHover text-white rounded-lg text-sm font-semibold shadow-md transition-colors self-start sm:self-auto"
-        >
-          <PlusCircle className="w-4 h-4" />
-          <span>Write Session Report</span>
-        </Link>
       </div>
 
       {/* World Filter Bar */}

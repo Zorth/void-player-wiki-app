@@ -6,7 +6,6 @@ import { getGuildCharacters, getGuildSessions, getGuildWorlds, getGuildQuests, f
 import { getSession } from '@/lib/auth';
 import { formatDate } from '@/lib/date';
 import CommentsSection from '@/components/CommentsSection';
-import BackButton from '@/components/BackButton';
 import {
   Compass,
   Calendar,
@@ -253,7 +252,13 @@ export default async function NotePage({ params }: { params: { slug: string } })
     <article className="max-w-4xl mx-auto space-y-8">
       {/* Top Bar: Back & World Breadcrumbs */}
       <div className="flex items-center justify-between text-xs text-obsidian-textFaint">
-        <BackButton fallbackHref={fallbackHref} label={backLabel} />
+        <Link
+          href={fallbackHref}
+          className="inline-flex items-center space-x-1.5 hover:text-white transition-colors cursor-pointer text-obsidian-textMuted"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          <span>{backLabel}</span>
+        </Link>
 
         {note.worlds.length > 0 && (
           <div className="flex items-center space-x-2">
