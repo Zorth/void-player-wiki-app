@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { MessageSquare, Trash2, Send, LogIn } from 'lucide-react';
+import { MessageSquare, Trash2, Send, LogIn, ThumbsUp, Heart, Laugh } from 'lucide-react';
 import { formatDateTime24h } from '@/lib/date';
 import { formatPlayerName } from '@/lib/constants';
 
@@ -14,6 +14,7 @@ interface Comment {
   user_nickname: string | null;
   content: string;
   created_at: string;
+  reactions?: Record<string, { count: number; users: string[] }>;
 }
 
 interface UserSession {
@@ -82,6 +83,45 @@ export default function CommentsSection({ noteSlug, initialUser }: { noteSlug: s
     });
     if (res.ok) {
       setComments(prev => prev.filter(c => c.id !== id));
+    }
+  };
+
+  const handleReact = async (commentId: number, reaction: 'upvote' | 'heart' | 'laugh') => {
+    if (!user) {
+      window.location.href = `/api/auth/login?returnTo=${encodeURIComponent(window.location.pathname)}`;
+      return;
+    }
+
+    // Optimistic UI update
+    setComments(prev => prev.map(c => {
+      if (c.id !== commentId) return c;
+      const current = c.reactions?.[reaction] || { count: 0, users: [] };
+      const hasReacted = current.users.includes(user.userId);
+      const newUsers = hasReacted
+        ? current.users.filter(u => u !== user.userId)
+        : [...current.users, user.userId];
+      const newCount = hasReacted ? Math.max(0, current.count - 1) : current.count + 1;
+
+      return {
+        ...c,
+        reactions: {
+          ...c.reactions,
+          [reaction]: { count: newCount, users: newUsers },
+        },
+      };
+    }));
+
+    try {
+      const res = await fetch('/api/comments/react', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ commentId, reaction }),
+      });
+      if (!res.ok) {
+        fetchComments();
+      }
+    } catch {
+      fetchComments();
     }
   };
 
@@ -191,6 +231,73 @@ export default function CommentsSection({ noteSlug, initialUser }: { noteSlug: s
                   <p className="mt-1.5 text-sm text-zinc-300 leading-relaxed whitespace-pre-line">
                     {c.content}
                   </p>
+
+                  {/* Reaction Buttons */}
+                  <div className="flex items-center space-x-1.5 mt-3 pt-2.5 border-t border-obsidian-borderSubtle/60">
+                    {/* THIS / +1 Button */}
+                    <button
+                      type="button"
+                      onClick={() => handleReact(c.id, 'upvote')}
+                      title={user ? 'Agree (+1 / THIS)' : 'Sign in to react'}
+                      className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all select-none border ${
+                        c.reactions?.upvote?.users?.includes(user?.userId || '')
+                          ? 'bg-purple-950/60 border-obsidian-purple text-purple-300 shadow-sm'
+                          : 'bg-obsidian-card hover:bg-obsidian-hover border-obsidian-border text-obsidian-textMuted hover:text-white'
+                      }`}
+                    >
+                      <ThumbsUp className={`w-3.5 h-3.5 ${
+                        c.reactions?.upvote?.users?.includes(user?.userId || '') ? 'text-obsidian-purpleLight fill-obsidian-purpleLight/20' : ''
+                      }`} />
+                      <span className="text-[11px] uppercase tracking-wider font-mono">THIS</span>
+                      {Number(c.reactions?.upvote?.count || 0) > 0 && (
+                        <span className="text-xs font-bold font-mono ml-0.5 text-purple-200">
+                          {c.reactions?.upvote?.count}
+                        </span>
+                      )}
+                    </button>
+
+                    {/* Heart / Like Button */}
+                    <button
+                      type="button"
+                      onClick={() => handleReact(c.id, 'heart')}
+                      title={user ? 'Love / Like' : 'Sign in to react'}
+                      className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all select-none border ${
+                        c.reactions?.heart?.users?.includes(user?.userId || '')
+                          ? 'bg-rose-950/60 border-rose-800 text-rose-300 shadow-sm'
+                          : 'bg-obsidian-card hover:bg-obsidian-hover border-obsidian-border text-obsidian-textMuted hover:text-white'
+                      }`}
+                    >
+                      <Heart className={`w-3.5 h-3.5 ${
+                        c.reactions?.heart?.users?.includes(user?.userId || '') ? 'text-rose-400 fill-rose-400' : ''
+                      }`} />
+                      {Number(c.reactions?.heart?.count || 0) > 0 && (
+                        <span className="text-xs font-bold font-mono text-rose-200">
+                          {c.reactions?.heart?.count}
+                        </span>
+                      )}
+                    </button>
+
+                    {/* Laugh / Funny Button */}
+                    <button
+                      type="button"
+                      onClick={() => handleReact(c.id, 'laugh')}
+                      title={user ? 'Funny / Laugh' : 'Sign in to react'}
+                      className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all select-none border ${
+                        c.reactions?.laugh?.users?.includes(user?.userId || '')
+                          ? 'bg-amber-950/60 border-amber-800 text-amber-300 shadow-sm'
+                          : 'bg-obsidian-card hover:bg-obsidian-hover border-obsidian-border text-obsidian-textMuted hover:text-white'
+                      }`}
+                    >
+                      <Laugh className={`w-3.5 h-3.5 ${
+                        c.reactions?.laugh?.users?.includes(user?.userId || '') ? 'text-amber-400 fill-amber-400/20' : ''
+                      }`} />
+                      {Number(c.reactions?.laugh?.count || 0) > 0 && (
+                        <span className="text-xs font-bold font-mono text-amber-200">
+                          {c.reactions?.laugh?.count}
+                        </span>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             );

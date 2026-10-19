@@ -51,6 +51,19 @@ function initSchema(db: DatabaseSync) {
     CREATE INDEX IF NOT EXISTS idx_comments_slug ON comments(note_slug);
   `);
 
+  // Comment reactions table (upvote/+1, heart/like, laugh/funny)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS comment_reactions (
+      comment_id INTEGER NOT NULL,
+      user_id TEXT NOT NULL,
+      reaction TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (comment_id, user_id, reaction),
+      FOREIGN KEY (comment_id) REFERENCES comments(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_comment_reactions_comment_id ON comment_reactions(comment_id);
+  `);
+
   // User permissions table (granting edit rights)
   db.exec(`
     CREATE TABLE IF NOT EXISTS user_permissions (
@@ -75,6 +88,7 @@ export interface CommentRecord {
   user_nickname: string | null;
   content: string;
   created_at: string;
+  reactions?: Record<string, { count: number; users: string[] }>;
 }
 
 export interface UserPermissionRecord {
@@ -91,7 +105,58 @@ export interface UserPermissionRecord {
 export function getCommentsForNote(slug: string): CommentRecord[] {
   const db = getDb();
   const query = db.prepare('SELECT * FROM comments WHERE note_slug = ? ORDER BY id ASC');
-  return query.all(slug) as unknown as CommentRecord[];
+  const comments = query.all(slug) as unknown as CommentRecord[];
+
+  if (comments.length === 0) return [];
+
+  // Fetch reactions for these comments
+  const commentIds = comments.map(c => c.id);
+  const placeholders = commentIds.map(() => '?').join(',');
+  const reactionQuery = db.prepare(`SELECT * FROM comment_reactions WHERE comment_id IN (${placeholders})`);
+  const reactions = reactionQuery.all(...commentIds) as unknown as Array<{ comment_id: number; user_id: string; reaction: string }>;
+
+  const reactionMap = new Map<number, Record<string, { count: number; users: string[] }>>();
+  for (const r of reactions) {
+    let commentReactions = reactionMap.get(r.comment_id);
+    if (!commentReactions) {
+      commentReactions = {};
+      reactionMap.set(r.comment_id, commentReactions);
+    }
+    if (!commentReactions[r.reaction]) {
+      commentReactions[r.reaction] = { count: 0, users: [] };
+    }
+    commentReactions[r.reaction].count += 1;
+    commentReactions[r.reaction].users.push(r.user_id);
+  }
+
+  for (const c of comments) {
+    c.reactions = reactionMap.get(c.id) || {};
+  }
+
+  return comments;
+}
+
+export function toggleCommentReaction(commentId: number, userId: string, reaction: string): { reacted: boolean; count: number } {
+  const db = getDb();
+  // Valid reactions: 'upvote' (+1/THIS), 'heart' (love/like), 'laugh' (funny/laugh)
+  const existing = db.prepare('SELECT * FROM comment_reactions WHERE comment_id = ? AND user_id = ? AND reaction = ?')
+    .get(commentId, userId, reaction);
+
+  let reacted = false;
+  if (existing) {
+    db.prepare('DELETE FROM comment_reactions WHERE comment_id = ? AND user_id = ? AND reaction = ?')
+      .run(commentId, userId, reaction);
+    reacted = false;
+  } else {
+    db.prepare('INSERT INTO comment_reactions (comment_id, user_id, reaction) VALUES (?, ?, ?)')
+      .run(commentId, userId, reaction);
+    reacted = true;
+  }
+
+  const countRow = db.prepare('SELECT COUNT(*) as count FROM comment_reactions WHERE comment_id = ? AND reaction = ?')
+    .get(commentId, reaction) as { count: number };
+
+  return { reacted, count: countRow ? Number(countRow.count) : 0 };
 }
 
 export function addComment(slug: string, userId: string, userName: string, userPicture: string | null, userNickname: string | null, content: string): CommentRecord {
