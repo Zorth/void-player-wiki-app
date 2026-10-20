@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { MessageSquare, Trash2, Send, LogIn, ThumbsUp, Heart, Laugh } from 'lucide-react';
+import { MessageSquare, Trash2, Send, LogIn, ArrowBigUp, Heart, Laugh } from 'lucide-react';
 import { formatDateTime24h } from '@/lib/date';
 import { formatPlayerName } from '@/lib/constants';
 
@@ -234,21 +234,21 @@ export default function CommentsSection({ noteSlug, initialUser }: { noteSlug: s
 
                   {/* Reaction Buttons */}
                   <div className="flex items-center space-x-1.5 mt-3 pt-2.5 border-t border-obsidian-borderSubtle/60">
-                    {/* THIS / +1 Button */}
+                    {/* Upvote / +1 Button */}
                     <button
                       type="button"
                       onClick={() => handleReact(c.id, 'upvote')}
-                      title={user ? 'Agree (+1 / THIS)' : 'Sign in to react'}
+                      title={user ? 'Upvote (+1)' : 'Sign in to react'}
                       className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all select-none border ${
                         c.reactions?.upvote?.users?.includes(user?.userId || '')
                           ? 'bg-purple-950/60 border-obsidian-purple text-purple-300 shadow-sm'
                           : 'bg-obsidian-card hover:bg-obsidian-hover border-obsidian-border text-obsidian-textMuted hover:text-white'
                       }`}
                     >
-                      <ThumbsUp className={`w-3.5 h-3.5 ${
-                        c.reactions?.upvote?.users?.includes(user?.userId || '') ? 'text-obsidian-purpleLight fill-obsidian-purpleLight/20' : ''
+                      <ArrowBigUp className={`w-4 h-4 ${
+                        c.reactions?.upvote?.users?.includes(user?.userId || '') ? 'text-obsidian-purpleLight fill-obsidian-purpleLight' : ''
                       }`} />
-                      <span className="text-[11px] uppercase tracking-wider font-mono">THIS</span>
+                      <span className="text-[11px] font-mono font-semibold">+1</span>
                       {Number(c.reactions?.upvote?.count || 0) > 0 && (
                         <span className="text-xs font-bold font-mono ml-0.5 text-purple-200">
                           {c.reactions?.upvote?.count}
